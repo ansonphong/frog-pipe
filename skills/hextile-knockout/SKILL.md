@@ -1,0 +1,39 @@
+---
+name: hextile-knockout
+description: "Knock out black (or light) background — greyscale→alpha + solid fill. Use for art-on-black PNGs needing transparent matte."
+user-invocable: true
+---
+
+# hextile-knockout
+
+Art-on-black PNG/JPG → RGBA: levels on luminance become **alpha**, RGB filled with a solid color (default white).
+
+## Run
+
+```bash
+ROOT="${HEXTILE_PIPE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${GROK_PLUGIN_ROOT:-${PLUGIN_ROOT:-}}}}"
+bash "$ROOT/scripts/fp-run.sh" knockout <path> --new [flags…]
+```
+
+**Agent default:** always pass `--new` unless user insists on overwrite.
+
+## Common flags
+
+Discover full set: `bash "$ROOT/scripts/fp-run.sh" knockout -h`
+
+| Flag | Meaning |
+|------|---------|
+| `--new` | Sidecar `file.ext.knockout.png` (required for agents) |
+| `--recursive` | Directory tree |
+| `--cutoff PCT` | Levels black point 0–100 |
+| `--white PCT` | Levels white point 0–100 |
+| `--gamma G` | Midtone gamma on alpha |
+| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` |
+| `--invert` | Dark art on light background |
+| `--force` | Allow reprocessing tagged outputs |
+
+## Path rules
+
+- Normalize Windows paths under WSL (`D:\x` → `/mnt/d/x`).
+- JPEG has no alpha — use `--new`.
+- Fence CLI output in the reply.

@@ -29,8 +29,9 @@ dist/
 build/
 develop-eggs/
 downloads/
-lib/
+/lib/
 lib64/
+!scripts/lib/
 parts/
 sdist/
 var/
@@ -142,6 +143,8 @@ BridgeCache*
 # --- Generated matte outputs (re-run scripts; don't commit by accident) ------
 *.cutout.png
 *.knockout.png
+*.recolor.png
+*.recolor.svg
 *.white.png
 *.white.svg
 
