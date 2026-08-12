@@ -1,9 +1,7 @@
 # matte
 
-**Stage 2 · prep · runtime: Python**
-
-Force white silhouettes, cut black→transparent (white glyph), or knock out
-black while keeping color.
+Python utilities for artwork mattes: force white silhouettes, cut
+black→transparent (white glyph), or knock out black while keeping color.
 
 Requires: `pip install pillow` (numpy optional, speeds large images).
 
@@ -81,5 +79,3 @@ Algorithm: `alpha = curve(max(R,G,B))` (or luminance); un-premultiply
 - Folder mode is non-recursive unless `--recursive`.
 - Files already named `*.white.svg` / `*.white.png` / `*.cutout.png` / `*.knockout.png` are skipped so re-runs are safe.
 - Default never overwrites; use `--in-place` only when you mean it.
-
-See also: [`docs/PIPELINE.md`](../docs/PIPELINE.md).
