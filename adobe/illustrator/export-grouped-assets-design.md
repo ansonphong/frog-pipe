@@ -2,7 +2,7 @@
 
 **Status:** design locked — depth hierarchy + naming  
 **Target script:** `ExportGroupedAssets.jsx` (ExtendScript, Adobe Illustrator)  
-**Related brief:** `Artboard-Export-All-Groups.md` (original production brief; this design **overrides** naming and clarifies selection)  
+**Related brief:** `artboard-export-all-groups.md` (original production brief; this design **overrides** naming and clarifies selection)  
 **Version target:** 0.2.7  
 **Design revision:** 2026-08-07 — PNG **target = hard max dimension, no pixel overshoot** (never 2053 when max is 2048); root selection order; per-format top-level; depth harvest.
 
@@ -600,7 +600,7 @@ Must **never**:
 | `CHANGELOG.md` | Start at 0.1.0 |
 | `export-grouped-assets-design.md` | This design (SSOT for product decisions) |
 
-`Artboard-Export-All-Groups.md` remains the long original brief; where it conflicts (especially **naming**), **this design wins**.
+`artboard-export-all-groups.md` remains the long original brief; where it conflicts (especially **naming**), **this design wins**.
 
 ---
 
