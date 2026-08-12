@@ -49,7 +49,7 @@ else
 fi
 
 # --- skills ---
-SKILLS=(hextile-pipe hextile-knockout hextile-cutout hextile-whiten-png hextile-whiten-svg hextile-despeckle)
+SKILLS=(hextile-pipe hextile-knockout hextile-cutout hextile-recolor-png hextile-recolor-svg hextile-despeckle)
 for s in "${SKILLS[@]}"; do
   f="$ROOT/skills/$s/SKILL.md"
   if [[ -f "$f" ]]; then
@@ -119,11 +119,11 @@ img2.save(d / "grey.png")
 print("synthetic ok")
 PY
 
-bash "$ROOT/scripts/fp-run.sh" whiten_svg "$SCRATCH/icon.svg" --new
-if [[ -f "$SCRATCH/icon.white.svg" ]]; then
-  ok "whiten_svg sidecar"
+bash "$ROOT/scripts/fp-run.sh" recolor_svg "$SCRATCH/icon.svg" --new
+if [[ -f "$SCRATCH/icon.recolor.svg" ]]; then
+  ok "recolor_svg sidecar"
 else
-  bad "whiten_svg no sidecar"
+  bad "recolor_svg no sidecar"
 fi
 
 bash "$ROOT/scripts/fp-run.sh" cutout "$SCRATCH/blob.png" --new
@@ -149,11 +149,11 @@ else
   bad "despeckle no sidecar"
 fi
 
-bash "$ROOT/scripts/fp-run.sh" whiten_png "$SCRATCH/blob.cutout.png" --new
-if ls "$SCRATCH"/*white.png >/dev/null 2>&1; then
-  ok "whiten_png sidecar"
+bash "$ROOT/scripts/fp-run.sh" recolor_png "$SCRATCH/blob.cutout.png" --new --color "#e13e13"
+if ls "$SCRATCH"/*recolor.png >/dev/null 2>&1; then
+  ok "recolor_png sidecar"
 else
-  bad "whiten_png no sidecar"
+  bad "recolor_png no sidecar"
 fi
 
 echo

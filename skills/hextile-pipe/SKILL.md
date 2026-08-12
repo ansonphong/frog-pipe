@@ -1,6 +1,6 @@
 ---
 name: hextile-pipe
-description: "Hub for 360 Hextile studio matte tools — route to knockout, cutout, whiten, despeckle; run doctor. Use when user says /hextile-pipe or needs studio matte help."
+description: "Hub for 360 Hextile studio matte tools — route to knockout, cutout, recolor, despeckle; run doctor. Use when user says /hextile-pipe or needs studio matte help."
 user-invocable: true
 ---
 
@@ -26,8 +26,8 @@ If ROOT is empty, locate `scripts/fp-run.sh` from this skill's package (plugin i
 | User intent | Skill or tool | fp-run tool |
 |-------------|---------------|-------------|
 | Doctor / install health | `fp-doctor.sh` | — |
-| Whiten SVG | `/hextile-whiten-svg` | `whiten_svg` |
-| Whiten PNG | `/hextile-whiten-png` | `whiten_png` |
+| Recolor SVG (default white) | `/hextile-recolor-svg` | `recolor_svg` |
+| Recolor PNG (default white) | `/hextile-recolor-png` | `recolor_png` |
 | White-on-black cutout | `/hextile-cutout` | `cutout` |
 | Art-on-black knockout | `/hextile-knockout` | `knockout` |
 | Dust / freckles | `/hextile-despeckle` | `despeckle` |
@@ -37,6 +37,7 @@ Hub usage:
 ```bash
 bash "$ROOT/scripts/fp-doctor.sh"
 bash "$ROOT/scripts/fp-run.sh" knockout path/to/file.png --new
+bash "$ROOT/scripts/fp-run.sh" recolor_png path/to/file.png --new --color "#e13e13"
 ```
 
 ## Agent defaults

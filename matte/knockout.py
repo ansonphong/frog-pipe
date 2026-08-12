@@ -25,13 +25,14 @@ from __future__ import annotations
 import argparse
 import math
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
 
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+
+from colorutil import COLOR_HELP, parse_color
 
 try:
     import numpy as np
@@ -44,42 +45,6 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 META_TOOL_KEY = "hextile-pipe-tool"
 META_TOOL_VALUE = "knockout"
 SIDECAR_MARKER = ".knockout.png"
-
-# Common named fills
-_NAMED = {
-    "white": (255, 255, 255),
-    "black": (0, 0, 0),
-    "red": (255, 0, 0),
-    "green": (0, 255, 0),
-    "blue": (0, 0, 255),
-    "cyan": (0, 255, 255),
-    "magenta": (255, 0, 255),
-    "yellow": (255, 255, 0),
-}
-
-
-def parse_color(s: str) -> tuple[int, int, int]:
-    """Parse fill color: name | #rgb | #rrggbb | r,g,b."""
-    raw = s.strip()
-    key = raw.lower()
-    if key in _NAMED:
-        return _NAMED[key]
-    if raw.startswith("#"):
-        h = raw[1:]
-        if len(h) == 3:
-            h = "".join(c * 2 for c in h)
-        if len(h) != 6 or any(c not in "0123456789abcdefABCDEF" for c in h):
-            raise ValueError(f"bad hex color: {s!r}")
-        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-    m = re.fullmatch(r"\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*", raw)
-    if m:
-        rgb = tuple(int(x) for x in m.groups())
-        if any(v > 255 for v in rgb):
-            raise ValueError(f"RGB components must be 0–255: {s!r}")
-        return rgb  # type: ignore[return-value]
-    raise ValueError(
-        f"bad color {s!r} — use name, #rrggbb, or r,g,b (e.g. white / #fff / 255,0,0)"
-    )
 
 
 def _validate_levels(cutoff: float, white: float, gamma: float) -> None:
@@ -372,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         "--color",
         type=str,
         default="white",
-        help="Fill RGB: name, #rrggbb, or r,g,b (default white)",
+        help=COLOR_HELP,
     )
     ap.add_argument(
         "--invert",

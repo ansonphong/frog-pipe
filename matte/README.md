@@ -1,32 +1,40 @@
 # matte
 
-Python utilities for artwork mattes: force white silhouettes, cut
+Python utilities for artwork mattes: recolor silhouettes, cut
 black→transparent (white glyph), or knock out black while keeping color.
 
 Requires: `pip install pillow` (numpy optional, speeds large images).
 
 **Default: overwrite the source file.** Pass `--new` to write a sidecar instead.
 
-## SVG white — `whiten_svg.py`
+`--color` (where present): name, `#rrggbb`, or `r,g,b`. **Default is white.**
 
-Makes shape fills and strokes `#ffffff`. Leaves `fill="none"` and `url(...)` paints alone.
+## SVG recolor — `recolor_svg.py`
+
+Sets shape fills and strokes to a solid color (default `#ffffff`).
+Leaves `fill="none"` and `url(...)` paints alone.
 
 ```bash
-python3 matte/whiten_svg.py icon.svg              # overwrites
-python3 matte/whiten_svg.py ./icons/
-python3 matte/whiten_svg.py ./icons/ --recursive
-python3 matte/whiten_svg.py icon.svg --new        # → icon.white.svg
+python3 matte/recolor_svg.py icon.svg              # white, overwrites
+python3 matte/recolor_svg.py ./icons/
+python3 matte/recolor_svg.py ./icons/ --recursive
+python3 matte/recolor_svg.py icon.svg --new        # → icon.recolor.svg
+python3 matte/recolor_svg.py icon.svg --color "#e13e13"
+python3 matte/recolor_svg.py icon.svg --color 0,200,255
 ```
 
-## PNG white — `whiten_png.py`
+## PNG recolor — `recolor_png.py`
 
-Sets RGB to white for every pixel with alpha > 0. Fully transparent pixels stay transparent.
+Sets RGB for every pixel with alpha > 0 (default pure white).
+Fully transparent pixels stay transparent.
 
 ```bash
-python3 matte/whiten_png.py sprite.png            # overwrites
-python3 matte/whiten_png.py ./sprites/
-python3 matte/whiten_png.py ./sprites/ --recursive
-python3 matte/whiten_png.py sprite.png --new      # → sprite.white.png
+python3 matte/recolor_png.py sprite.png            # white, overwrites
+python3 matte/recolor_png.py ./sprites/
+python3 matte/recolor_png.py ./sprites/ --recursive
+python3 matte/recolor_png.py sprite.png --new      # → sprite.recolor.png
+python3 matte/recolor_png.py sprite.png --color red
+python3 matte/recolor_png.py sprite.png --color "#e13e13"
 ```
 
 ## Cutout — `cutout.py` (black → transparent, white glyph)
@@ -95,7 +103,7 @@ Codex Sol review: min-area primary; morph open / blur **not** default (too destr
 
 | Need | Script |
 |------|--------|
-| Force fills/pixels white | `whiten_svg.py` / `whiten_png.py` |
+| Force fills/pixels to a color (default white) | `recolor_svg.py` / `recolor_png.py` |
 | White silhouette cutout (luminance→alpha, always white) | `cutout.py` |
 | Same idea + levels cutoff + any fill color | `knockout.py` |
 | Remove dust / freckles (black or transparent) | `despeckle.py` |
@@ -103,12 +111,14 @@ Codex Sol review: min-area primary; morph open / blur **not** default (too destr
 ## Naming
 
 - `snake_case.py`, verb first
-- Format suffix only when engines differ (`whiten_svg` / `whiten_png`)
-- Sidecar outputs (`--new`): `*.white.*`, `*.cutout.png`, `*.knockout.png`, `*.despeckle.png`
+- Format suffix only when engines differ (`recolor_svg` / `recolor_png`)
+- Shared color parse: `colorutil.py`
+- Sidecar outputs (`--new`): `*.recolor.*`, `*.cutout.png`, `*.knockout.png`, `*.despeckle.png`
 
 ## Notes
 
 - Folder mode is non-recursive unless `--recursive`.
-- Files already named `*.white.svg` / `*.white.png` / `*.cutout.png` / `*.knockout.png` / `*.despeckle.png` are skipped so re-runs of `--new` are safe.
+- Files already named `*.recolor.svg` / `*.recolor.png` / `*.cutout.png` / `*.knockout.png` / `*.despeckle.png` are skipped so re-runs of `--new` are safe (legacy `*.white.*` also skipped by recolor tools).
 - Default **overwrites** the source. Use `--new` when you want a sidecar copy.
 - `despeckle` is not fully idempotent if you raise cutoff/min-area between runs — prefer one clean pass from backup.
+- Old names `whiten_svg` / `whiten_png` still work via `scripts/fp-run.sh` aliases.

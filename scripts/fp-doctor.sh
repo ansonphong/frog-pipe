@@ -27,7 +27,7 @@ else
   bad "plugin root layout incomplete"
 fi
 
-TOOLS=(recolor_svg recolor_png cutout knockout despeckle colorutil)
+TOOLS=(recolor_svg recolor_png cutout knockout despeckle)
 for t in "${TOOLS[@]}"; do
   f="$ROOT/matte/${t}.py"
   if [[ -f "$f" ]]; then
@@ -36,6 +36,12 @@ for t in "${TOOLS[@]}"; do
     bad "matte/${t}.py missing"
   fi
 done
+
+if [[ -f "$ROOT/matte/colorutil.py" ]]; then
+  ok "matte/colorutil.py present"
+else
+  bad "matte/colorutil.py missing"
+fi
 
 if python3 -c "from PIL import Image" 2>/dev/null; then
   ok "Pillow importable"
