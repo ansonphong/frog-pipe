@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Recolor all opaque (and semi-transparent) PNG pixels; keep alpha.
+"""Recolor opaque (and semi-transparent) PNG pixels; keep alpha.
 
 Default fill is pure white. Use --color for any RGB.
+Use --min-alpha to ignore AA fringe / near-clear noise (default 1 = all a>0).
 
 Usage:
   python recolor_png.py path/to/file.png              # white (default), overwrites
@@ -10,6 +11,7 @@ Usage:
   python recolor_png.py path/to/file.png --new        # → file.recolor.png
   python recolor_png.py path/to/file.png --color "#e13e13"
   python recolor_png.py path/to/file.png --color 0,200,255
+  python recolor_png.py path/to/file.png --min-alpha 16
 """
 from __future__ import annotations
 
@@ -34,17 +36,27 @@ _LEGACY_SIDECAR = ".white.png"
 
 
 def recolor_png_file(
-    src: Path, dest: Path, color: tuple[int, int, int] = (255, 255, 255)
+    src: Path,
+    dest: Path,
+    color: tuple[int, int, int] = (255, 255, 255),
+    *,
+    min_alpha: int = 1,
 ) -> None:
     fr, fg, fb = color
     if not all(0 <= c <= 255 for c in color):
         raise ValueError("fill color components must be 0–255")
+    if not 0 <= min_alpha <= 255:
+        raise ValueError("min_alpha must be 0–255")
     with Image.open(src) as im:
         rgba = im.convert("RGBA")
         if HAS_NUMPY:
             arr = np.array(rgba)
             alpha = arr[:, :, 3]
-            mask = alpha > 0
+            # default min_alpha=1 → same as historical alpha > 0 for uint8
+            if min_alpha <= 0:
+                mask = alpha > 0
+            else:
+                mask = alpha >= min_alpha
             arr[mask, 0] = fr
             arr[mask, 1] = fg
             arr[mask, 2] = fb
@@ -55,7 +67,11 @@ def recolor_png_file(
             for y in range(h):
                 for x in range(w):
                     r, g, b, a = pixels[x, y]
-                    if a > 0:
+                    if min_alpha <= 0:
+                        hit = a > 0
+                    else:
+                        hit = a >= min_alpha
+                    if hit:
                         pixels[x, y] = (fr, fg, fb, a)
             out = rgba
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -104,6 +120,16 @@ def main(argv: list[str] | None = None) -> int:
         default="white",
         help=COLOR_HELP,
     )
+    ap.add_argument(
+        "--min-alpha",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Only recolor pixels with alpha >= N (default 1 = all nonzero; "
+            "raise to skip AA fringe, e.g. 8–16)"
+        ),
+    )
     args = ap.parse_args(argv)
 
     path = args.path.expanduser().resolve()
@@ -115,6 +141,10 @@ def main(argv: list[str] | None = None) -> int:
         fill = parse_color(args.color)
     except ValueError as e:
         print(f"ERR {e}", file=sys.stderr)
+        return 1
+
+    if not 0 <= args.min_alpha <= 255:
+        print("ERR --min-alpha must be 0–255", file=sys.stderr)
         return 1
 
     try:
@@ -131,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     for src in files:
         dest = dest_for(src, args.new)
         try:
-            recolor_png_file(src, dest, color=fill)
+            recolor_png_file(src, dest, color=fill, min_alpha=args.min_alpha)
             print(f"OK  {src} -> {dest}")
         except Exception as e:
             errors += 1

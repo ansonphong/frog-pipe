@@ -1,6 +1,6 @@
 ---
 name: hextile-despeckle
-description: "Despeckle dust/freckles on black-bg or transparent art via min-area components + levels."
+description: "Despeckle dust/freckles on black-bg or transparent art via min-area components + levels; scale-aware and multi-pass."
 user-invocable: true
 ---
 
@@ -26,8 +26,12 @@ bash "$ROOT/scripts/fp-run.sh" despeckle <path> --new [flags…]
 | `--new` | Sidecar `file.despeckle.png` |
 | `--recursive` | Directory tree |
 | `--mode auto\|alpha\|black` | Coverage source |
-| `--min-area N` | Drop components under N pixels |
-| `--cutoff` / `--white` / `--gamma` | Levels on coverage |
+| `--min-area N` | Drop components under N pixels (default 4) |
+| `--min-area-rel F` | Scale-aware: max(1, round(F × long_edge²)); exclusive with `--min-area` |
+| `--passes P` | Repeat cleanup P times (default 1) |
+| `--cutoff` / `--white` | Levels 0–100 |
+| `--black-point` / `--white-point` | Levels 0–255 aliases |
+| `--gamma` | Midtone gamma |
 | `--to-alpha` | BLACK mode: emit RGBA |
 | `--color` / `--invert` | Fill / invert |
 

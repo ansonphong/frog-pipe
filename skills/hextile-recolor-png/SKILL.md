@@ -1,13 +1,13 @@
 ---
 name: hextile-recolor-png
-description: "Force PNG opaque pixels to a solid color (default white); preserve alpha. Use for silhouettes that need a flat fill."
+description: "Force PNG opaque pixels to a solid color (default white); preserve alpha. Use --min-alpha to skip AA fringe."
 user-invocable: true
 ---
 
 # hextile-recolor-png
 
-Sets RGB for every pixel with alpha > 0. Fully transparent pixels stay transparent.
-Default color is pure white; pass `--color` for any fill.
+Sets RGB for pixels with alpha ≥ `--min-alpha` (default 1 = all nonzero).
+Fully transparent / sub-floor pixels keep original RGB.
 
 ## Run
 
@@ -27,6 +27,7 @@ bash "$ROOT/scripts/fp-run.sh" recolor_png <path> --new [flags…]
 | `--new` | Sidecar `file.recolor.png` |
 | `--recursive` | Directory tree |
 | `--color` | Fill RGB: name, `#rrggbb`, or `r,g,b` (default white) |
+| `--min-alpha N` | Only recolor when alpha ≥ N (default 1; try 8–16 for fringe) |
 
 ## Path rules
 

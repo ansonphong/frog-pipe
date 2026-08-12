@@ -1,7 +1,7 @@
-"""Shared color parse helpers for matte CLIs.
+"""Shared color + levels helpers for matte CLIs.
 
-Accepts: named color | #rgb | #rrggbb | r,g,b
-Default fill across tools is white.
+Color: named | #rgb | #rrggbb | r,g,b (default fill is white).
+Levels dual units: percent 0–100 ↔ raw luma 0–255.
 """
 from __future__ import annotations
 
@@ -48,3 +48,124 @@ def parse_color(s: str) -> tuple[int, int, int]:
 def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
     r, g, b = rgb
     return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def pct_to_u8(pct: float) -> float:
+    """Levels percent 0–100 → luma 0–255 (float)."""
+    return float(pct) / 100.0 * 255.0
+
+
+def u8_to_pct(u8: float) -> float:
+    """Luma 0–255 → levels percent 0–100."""
+    return float(u8) / 255.0 * 100.0
+
+
+def resolve_levels_pct(
+    *,
+    cutoff: float | None,
+    white: float | None,
+    black_point: float | None,
+    white_point: float | None,
+    default_cutoff: float,
+    default_white: float,
+) -> tuple[float, float]:
+    """Resolve to (cutoff_pct, white_pct) in 0–100.
+
+    Prefer native percent flags; convert 0–255 points when only those are set.
+    Error if both unit systems are set for the same end.
+    """
+    if cutoff is not None and black_point is not None:
+        raise ValueError(
+            "use only one of --cutoff (0–100%) or --black-point (0–255), not both"
+        )
+    if white is not None and white_point is not None:
+        raise ValueError(
+            "use only one of --white (0–100%) or --white-point (0–255), not both"
+        )
+
+    if cutoff is not None:
+        c = float(cutoff)
+    elif black_point is not None:
+        c = u8_to_pct(black_point)
+    else:
+        c = float(default_cutoff)
+
+    if white is not None:
+        w = float(white)
+    elif white_point is not None:
+        w = u8_to_pct(white_point)
+    else:
+        w = float(default_white)
+
+    return c, w
+
+
+def resolve_levels_u8(
+    *,
+    black_point: int | None,
+    white_point: int | None,
+    cutoff: float | None,
+    white: float | None,
+    default_black: int,
+    default_white: int,
+) -> tuple[int, int]:
+    """Resolve to (black_point, white_point) as integer 0–255 luma.
+
+    Prefer native 0–255 flags; convert percent when only those are set.
+    Error if both unit systems are set for the same end.
+    """
+    if black_point is not None and cutoff is not None:
+        raise ValueError(
+            "use only one of --black-point (0–255) or --cutoff (0–100%), not both"
+        )
+    if white_point is not None and white is not None:
+        raise ValueError(
+            "use only one of --white-point (0–255) or --white (0–100%), not both"
+        )
+
+    if black_point is not None:
+        bp = int(black_point)
+    elif cutoff is not None:
+        bp = int(round(pct_to_u8(cutoff)))
+    else:
+        bp = int(default_black)
+
+    if white_point is not None:
+        wp = int(white_point)
+    elif white is not None:
+        wp = int(round(pct_to_u8(white)))
+    else:
+        wp = int(default_white)
+
+    return bp, wp
+
+
+def effective_min_area(
+    *,
+    width: int,
+    height: int,
+    min_area: int | None,
+    min_area_rel: float | None,
+    default_min_area: int = 4,
+) -> int:
+    """Resolve absolute pixel min-area from absolute and/or relative flags.
+
+    If --min-area-rel is set, effective = max(1, round(rel * long_edge²))
+    (rel ≤ 0 → 0 = off). Error if both absolute and relative are given.
+    """
+    if min_area is not None and min_area_rel is not None:
+        raise ValueError(
+            "use only one of --min-area (pixels) or --min-area-rel (fraction of long²)"
+        )
+    if min_area_rel is not None:
+        if min_area_rel < 0:
+            raise ValueError("--min-area-rel must be >= 0")
+        if min_area_rel == 0:
+            return 0
+        long_edge = max(int(width), int(height))
+        return max(1, int(round(min_area_rel * long_edge * long_edge)))
+    if min_area is not None:
+        if min_area < 0:
+            raise ValueError("--min-area must be >= 0")
+        return int(min_area)
+    return int(default_min_area)

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""White-on-black PNG/JPG → pure white RGB + transparent black (crisp AA).
+"""White-on-black PNG/JPG → solid fill RGB + transparent black (crisp AA).
 
-Uses luminance as alpha, forces RGB to white so edges never show a dark halo.
+Uses luminance as alpha, forces RGB to --color (default white) so edges
+never show a dark halo.
 
 Usage:
-  python cutout.py path/to/file.png          # overwrites (default)
+  python cutout.py path/to/file.png          # overwrites (default), white fill
   python cutout.py path/to/folder/
   python cutout.py path/to/folder/ --recursive
   python cutout.py path/to/file.png --new    # → file.cutout.png
   python cutout.py path/to/file.jpg --new    # JPEG needs --new (no alpha)
   python cutout.py path/to/file.png --black-point 12 --gamma 1.3
+  python cutout.py path/to/file.png --cutoff 5 --white 97   # percent aliases
+  python cutout.py path/to/file.png --color "#e13e13"
   python cutout.py path/to/file.png --invert   # dark glyph on light BG
 """
 from __future__ import annotations
@@ -20,6 +23,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from colorutil import COLOR_HELP, parse_color, resolve_levels_u8
+
 try:
     import numpy as np
 
@@ -28,6 +33,8 @@ except ImportError:
     HAS_NUMPY = False
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
+DEFAULT_BLACK_POINT = 8
+DEFAULT_WHITE_POINT = 247
 
 
 def _alpha_from_l(L: float, black_point: int, white_point: int, gamma: float) -> int:
@@ -45,16 +52,20 @@ def _alpha_from_l(L: float, black_point: int, white_point: int, gamma: float) ->
 def cutout_image(
     im: Image.Image,
     *,
-    black_point: int = 8,
-    white_point: int = 247,
+    black_point: int = DEFAULT_BLACK_POINT,
+    white_point: int = DEFAULT_WHITE_POINT,
     gamma: float = 1.0,
     invert: bool = False,
+    color: tuple[int, int, int] = (255, 255, 255),
 ) -> Image.Image:
-    """Return RGBA: pure white where visible, black field transparent, AA preserved."""
+    """Return RGBA: solid fill where visible, black field transparent, AA preserved."""
     if black_point >= white_point:
         raise ValueError("black_point must be < white_point")
     if gamma <= 0:
         raise ValueError("gamma must be > 0")
+    fr, fg, fb = color
+    if not all(0 <= c <= 255 for c in (fr, fg, fb)):
+        raise ValueError("fill color components must be 0–255")
 
     rgba = im.convert("RGBA")
     if HAS_NUMPY:
@@ -76,12 +87,12 @@ def cutout_image(
             if gamma != 1.0:
                 t = np.power(t, gamma)
             a[mid] = np.clip(np.rint(t * 255.0), 0, 255).astype(np.uint8)
-        # pure white RGB; transparent pixels RGB=0 for smaller PNGs
+        # solid fill RGB; transparent pixels RGB=0 for smaller PNGs
         out = np.zeros_like(arr)
         vis = a > 0
-        out[vis, 0] = 255
-        out[vis, 1] = 255
-        out[vis, 2] = 255
+        out[vis, 0] = fr
+        out[vis, 1] = fg
+        out[vis, 2] = fb
         out[:, :, 3] = a
         return Image.fromarray(out, mode="RGBA")
 
@@ -98,7 +109,7 @@ def cutout_image(
                 L = 255.0 - L
             a = _alpha_from_l(L, black_point, white_point, gamma)
             if a > 0:
-                op[x, y] = (255, 255, 255, a)
+                op[x, y] = (fr, fg, fb, a)
     return out
 
 
@@ -106,10 +117,11 @@ def cutout_file(
     src: Path,
     dest: Path,
     *,
-    black_point: int = 8,
-    white_point: int = 247,
+    black_point: int = DEFAULT_BLACK_POINT,
+    white_point: int = DEFAULT_WHITE_POINT,
     gamma: float = 1.0,
     invert: bool = False,
+    color: tuple[int, int, int] = (255, 255, 255),
 ) -> None:
     with Image.open(src) as im:
         out = cutout_image(
@@ -118,6 +130,7 @@ def cutout_file(
             white_point=white_point,
             gamma=gamma,
             invert=invert,
+            color=color,
         )
         dest.parent.mkdir(parents=True, exist_ok=True)
         out.save(dest, format="PNG")
@@ -155,8 +168,8 @@ def dest_for(src: Path, new: bool) -> Path:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=(
-            "White-on-black image → pure white + transparent black (crisp AA). "
-            "Luminance becomes alpha; RGB forced to white. "
+            "White-on-black image → solid fill + transparent black (crisp AA). "
+            "Luminance becomes alpha; RGB forced to --color (default white). "
             "Default: overwrite source PNG."
         )
     )
@@ -170,20 +183,42 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--black-point",
         type=int,
-        default=8,
-        help="L <= N → alpha 0 (default 8)",
+        default=None,
+        metavar="N",
+        help=f"L <= N → alpha 0 (0–255; default {DEFAULT_BLACK_POINT})",
     )
     ap.add_argument(
         "--white-point",
         type=int,
-        default=247,
-        help="L >= N → alpha 255 (default 247)",
+        default=None,
+        metavar="N",
+        help=f"L >= N → alpha 255 (0–255; default {DEFAULT_WHITE_POINT})",
+    )
+    ap.add_argument(
+        "--cutoff",
+        type=float,
+        default=None,
+        metavar="PCT",
+        help="Alias for black point as 0-100 pct (mutually exclusive with --black-point)",
+    )
+    ap.add_argument(
+        "--white",
+        type=float,
+        default=None,
+        metavar="PCT",
+        help="Alias for white point as 0-100 pct (mutually exclusive with --white-point)",
     )
     ap.add_argument(
         "--gamma",
         type=float,
         default=1.0,
         help="Midtone gamma >1 = crisper (default 1.0)",
+    )
+    ap.add_argument(
+        "--color",
+        type=str,
+        default="white",
+        help=COLOR_HELP,
     )
     ap.add_argument(
         "--invert",
@@ -195,6 +230,32 @@ def main(argv: list[str] | None = None) -> int:
     path = args.path.expanduser().resolve()
     if not path.exists():
         print(f"ERR path not found: {path}", file=sys.stderr)
+        return 1
+
+    try:
+        fill = parse_color(args.color)
+    except ValueError as e:
+        print(f"ERR {e}", file=sys.stderr)
+        return 1
+
+    try:
+        black_point, white_point = resolve_levels_u8(
+            black_point=args.black_point,
+            white_point=args.white_point,
+            cutoff=args.cutoff,
+            white=args.white,
+            default_black=DEFAULT_BLACK_POINT,
+            default_white=DEFAULT_WHITE_POINT,
+        )
+    except ValueError as e:
+        print(f"ERR {e}", file=sys.stderr)
+        return 1
+
+    if black_point >= white_point:
+        print("ERR need black_point < white_point", file=sys.stderr)
+        return 1
+    if args.gamma <= 0:
+        print("ERR gamma must be > 0", file=sys.stderr)
         return 1
 
     try:
@@ -214,10 +275,11 @@ def main(argv: list[str] | None = None) -> int:
             cutout_file(
                 src,
                 dest,
-                black_point=args.black_point,
-                white_point=args.white_point,
+                black_point=black_point,
+                white_point=white_point,
                 gamma=args.gamma,
                 invert=args.invert,
+                color=fill,
             )
             print(f"OK  {src} -> {dest}")
         except SystemExit as e:

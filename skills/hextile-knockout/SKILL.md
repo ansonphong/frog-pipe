@@ -27,6 +27,7 @@ Discover full set: `bash "$ROOT/scripts/fp-run.sh" knockout -h`
 | `--recursive` | Directory tree |
 | `--cutoff PCT` | Levels black point 0–100 |
 | `--white PCT` | Levels white point 0–100 |
+| `--black-point` / `--white-point` | Raw luma 0–255 aliases |
 | `--gamma G` | Midtone gamma on alpha |
 | `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` |
 | `--invert` | Dark art on light background |

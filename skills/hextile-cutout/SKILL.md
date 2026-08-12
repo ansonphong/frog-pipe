@@ -1,12 +1,12 @@
 ---
 name: hextile-cutout
-description: "White-on-black cutout — pure white RGB + transparent black with AA. Use for glyphs/logos on black."
+description: "White-on-black cutout — solid fill RGB (default white) + transparent black with AA. Use for glyphs/logos on black."
 user-invocable: true
 ---
 
 # hextile-cutout
 
-White-on-black image → pure white + transparent black (crisp anti-alias via luminance→alpha).
+White-on-black image → solid fill + transparent black (crisp anti-alias via luminance→alpha).
 
 ## Run
 
@@ -25,9 +25,11 @@ bash "$ROOT/scripts/fp-run.sh" cutout <path> --new [flags…]
 |------|---------|
 | `--new` | Sidecar `file.cutout.png` |
 | `--recursive` | Directory tree |
-| `--black-point N` | L ≤ N → alpha 0 |
-| `--white-point N` | L ≥ N → alpha 255 |
+| `--black-point N` | L ≤ N → alpha 0 (0–255; default 8) |
+| `--white-point N` | L ≥ N → alpha 255 (0–255; default 247) |
+| `--cutoff` / `--white` | Percent 0–100 aliases for black/white point |
 | `--gamma G` | Midtone gamma |
+| `--color COLOR` | Solid fill RGB (default white) |
 | `--invert` | Dark glyph on light background |
 
 ## Path rules

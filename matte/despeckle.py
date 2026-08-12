@@ -6,18 +6,22 @@ Works on a single *coverage* channel (alpha or luminance), not RGB filters.
 Process (Codex Sol–approved defaults):
   1. Mode auto: any A < 255 → alpha coverage; else luminance on black
   2. Support mask = coverage above --cutoff
-  3. Drop 8-connected components smaller than --min-area (default 4)
+  3. Drop 8-connected components smaller than --min-area (or --min-area-rel)
   4. Levels once (cutoff / white / gamma) on remaining coverage
   5. Pack: alpha keeps RGB (or --color); black → grey-on-black
      (or --to-alpha → white/color fill + alpha)
+  6. Optional --passes P repeats steps 2–5 on the result
 
 Usage:
   python despeckle.py path/to/file.png
   python despeckle.py path/to/folder/
   python despeckle.py path/to/file.png --new
   python despeckle.py path/to/file.png --min-area 8 --cutoff 2
+  python despeckle.py path/to/file.png --min-area-rel 0.0001
+  python despeckle.py path/to/file.png --passes 2
   python despeckle.py path/to/file.png --mode black --to-alpha
   python despeckle.py path/to/file.png --color white   # force fill when alpha out
+  python despeckle.py path/to/file.png --black-point 3  # 0–255 alias for --cutoff
 """
 from __future__ import annotations
 
@@ -29,7 +33,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from colorutil import parse_color
+from colorutil import effective_min_area, parse_color, resolve_levels_pct
 
 try:
     import numpy as np
@@ -193,19 +197,19 @@ def _levels_pil(cov_img: Image.Image, black_pt: float, white_pt: float, gamma: f
     return out
 
 
-def despeckle_image(
+def _despeckle_once(
     im: Image.Image,
     *,
-    mode: str = "auto",
-    min_area: int = 4,
-    cutoff: float = 1.0,
-    white: float = 100.0,
-    gamma: float = 1.0,
-    to_alpha: bool = False,
-    color: tuple[int, int, int] | None = None,
-    invert: bool = False,
+    mode: str,
+    min_area: int,
+    cutoff: float,
+    white: float,
+    gamma: float,
+    to_alpha: bool,
+    color: tuple[int, int, int] | None,
+    invert: bool,
 ) -> Image.Image:
-    """Despeckle coverage; return RGB (grey-on-black) or RGBA."""
+    """Single despeckle pass; return RGB (grey-on-black) or RGBA."""
     if mode not in MODE_CHOICES:
         raise ValueError(f"mode must be one of {MODE_CHOICES}")
     if not 0.0 <= cutoff < white <= 100.0:
@@ -267,11 +271,9 @@ def despeckle_image(
         return Image.fromarray(out_rgb, mode="RGB")
 
     # ---- Pillow-only path ----
-    resolved = detect_mode(im, mode)
     if resolved == "alpha":
         cov_img = rgba.getchannel("A")
     else:
-        # luminance approx via convert L
         cov_img = rgba.convert("L")
     if invert:
         cov_img = Image.eval(cov_img, lambda v: 255 - v)
@@ -289,20 +291,49 @@ def despeckle_image(
         else:
             base = Image.new("RGBA", rgba.size, (255, 255, 255, 0))
         base.putalpha(cleaned_img)
-        # zero RGB where alpha 0
-        if HAS_NUMPY:
-            pass  # unreachable
-        arr = base.split()
-        # rebuild: RGB from base but clear where A==0
-        r_b, g_b, b_b, a_b = base.split()
-        # mask
+        r_b, g_b, b_b, _a_b = base.split()
         empty = Image.new("L", rgba.size, 0)
-        r_b = Image.composite(r_b, empty, cleaned_img.point(lambda v: 255 if v > 0 else 0))
-        g_b = Image.composite(g_b, empty, cleaned_img.point(lambda v: 255 if v > 0 else 0))
-        b_b = Image.composite(b_b, empty, cleaned_img.point(lambda v: 255 if v > 0 else 0))
+        mask = cleaned_img.point(lambda v: 255 if v > 0 else 0)
+        r_b = Image.composite(r_b, empty, mask)
+        g_b = Image.composite(g_b, empty, mask)
+        b_b = Image.composite(b_b, empty, mask)
         return Image.merge("RGBA", (r_b, g_b, b_b, cleaned_img))
 
     return Image.merge("RGB", (cleaned_img, cleaned_img, cleaned_img))
+
+
+def despeckle_image(
+    im: Image.Image,
+    *,
+    mode: str = "auto",
+    min_area: int = 4,
+    cutoff: float = 1.0,
+    white: float = 100.0,
+    gamma: float = 1.0,
+    to_alpha: bool = False,
+    color: tuple[int, int, int] | None = None,
+    invert: bool = False,
+    passes: int = 1,
+) -> Image.Image:
+    """Despeckle coverage; optional multi-pass. Return RGB or RGBA."""
+    if passes < 1:
+        raise ValueError("passes must be >= 1")
+    current = im
+    for i in range(passes):
+        # After first pass, alpha products should stay in alpha mode; black
+        # grey-on-black stays black. detect_mode handles both.
+        current = _despeckle_once(
+            current,
+            mode=mode if i == 0 else "auto",
+            min_area=min_area,
+            cutoff=cutoff,
+            white=white,
+            gamma=gamma,
+            to_alpha=to_alpha,
+            color=color,
+            invert=invert if i == 0 else False,
+        )
+    return current
 
 
 def _atomic_save(img: Image.Image, dest: Path, fmt: str) -> None:
@@ -394,23 +425,54 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--min-area",
         type=int,
-        default=4,
+        default=None,
         metavar="N",
         help="Drop 8-connected components with area < N pixels (default 4; 0=off)",
     )
     ap.add_argument(
+        "--min-area-rel",
+        type=float,
+        default=None,
+        metavar="F",
+        help=(
+            "Scale-aware min-area: fraction of long_edge² "
+            "(effective = max(1, round(F * long²)); mutually exclusive with --min-area)"
+        ),
+    )
+    ap.add_argument(
+        "--passes",
+        type=int,
+        default=1,
+        metavar="P",
+        help="Repeat min-area + levels cleanup P times (default 1)",
+    )
+    ap.add_argument(
         "--cutoff",
         type=float,
-        default=1.0,
+        default=None,
         metavar="PCT",
         help="Levels black point 0–100 (default 1)",
     )
     ap.add_argument(
         "--white",
         type=float,
-        default=100.0,
+        default=None,
         metavar="PCT",
         help="Levels white point 0–100 (default 100)",
+    )
+    ap.add_argument(
+        "--black-point",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Alias for --cutoff as raw luma 0–255 (mutually exclusive with --cutoff)",
+    )
+    ap.add_argument(
+        "--white-point",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Alias for --white as raw luma 0–255 (mutually exclusive with --white)",
     )
     ap.add_argument(
         "--gamma",
@@ -441,11 +503,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERR path not found: {path}", file=sys.stderr)
         return 1
 
-    if not 0.0 <= args.cutoff < args.white <= 100.0:
-        print("ERR need 0 <= --cutoff < --white <= 100", file=sys.stderr)
+    try:
+        cutoff, white = resolve_levels_pct(
+            cutoff=args.cutoff,
+            white=args.white,
+            black_point=args.black_point,
+            white_point=args.white_point,
+            default_cutoff=1.0,
+            default_white=100.0,
+        )
+    except ValueError as e:
+        print(f"ERR {e}", file=sys.stderr)
         return 1
-    if args.min_area < 0:
-        print("ERR --min-area must be >= 0", file=sys.stderr)
+
+    if not 0.0 <= cutoff < white <= 100.0:
+        print("ERR need 0 <= cutoff < white <= 100", file=sys.stderr)
+        return 1
+    if args.passes < 1:
+        print("ERR --passes must be >= 1", file=sys.stderr)
+        return 1
+    if args.min_area is not None and args.min_area_rel is not None:
+        print(
+            "ERR use only one of --min-area or --min-area-rel",
+            file=sys.stderr,
+        )
         return 1
 
     fill: tuple[int, int, int] | None = None
@@ -471,23 +552,37 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with Image.open(src) as probe:
                 resolved = detect_mode(probe, args.mode)
+                w, h = probe.size
             emit_alpha = resolved == "alpha" or args.to_alpha
             # color default for to-alpha from black
             color_arg = fill
             if emit_alpha and color_arg is None and resolved == "black":
                 color_arg = (255, 255, 255)
             dest = dest_for(src, args.new, emit_alpha)
+            try:
+                ma = effective_min_area(
+                    width=w,
+                    height=h,
+                    min_area=args.min_area,
+                    min_area_rel=args.min_area_rel,
+                    default_min_area=4,
+                )
+            except ValueError as e:
+                print(f"ERR {src}: {e}", file=sys.stderr)
+                errors += 1
+                continue
             despeckle_file(
                 src,
                 dest,
                 mode=args.mode,
-                min_area=args.min_area,
-                cutoff=args.cutoff,
-                white=args.white,
+                min_area=ma,
+                cutoff=cutoff,
+                white=white,
                 gamma=args.gamma,
                 to_alpha=args.to_alpha,
                 color=color_arg,
                 invert=args.invert,
+                passes=args.passes,
             )
             print(f"OK  {src} -> {dest}")
         except SystemExit as e:

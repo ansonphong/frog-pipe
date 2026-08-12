@@ -36,10 +36,10 @@ Requires: `pip install pillow` (numpy optional).
 
 ```bash
 python3 matte/recolor_svg.py icon.svg
-python3 matte/recolor_png.py sprite.png --color "#e13e13"
-python3 matte/cutout.py file.png
+python3 matte/recolor_png.py sprite.png --color "#e13e13" --min-alpha 16
+python3 matte/cutout.py file.png --color "#e13e13"
 python3 matte/knockout.py file.png --cutoff 5 --color white
-python3 matte/despeckle.py file.png --min-area 64
+python3 matte/despeckle.py file.png --min-area-rel 0.0001 --passes 2
 python3 matte/knockout.py file.png --new          # sidecar
 ```
 
@@ -47,10 +47,10 @@ python3 matte/knockout.py file.png --new          # sidecar
 |--------|----------------|
 | `recolor_svg.py` | SVG fills/strokes → solid color (default white) |
 | `recolor_png.py` | Opaque PNG pixels → solid color, keep alpha (default white) |
-| `cutout.py` | White-on-black → pure white + transparent black (AA via luma) |
+| `cutout.py` | White-on-black → solid fill + transparent black (AA via luma) |
 | `knockout.py` | Greyscale→alpha (levels) + solid fill (default white) |
 | `despeckle.py` | Min-area dust removal on black or transparent coverage |
-| `colorutil.py` | Shared color parser (not a CLI) |
+| `colorutil.py` | Shared color + levels helpers (not a CLI) |
 
 Detail + recipes: **`matte/README.md`**. Dispatch: `bash scripts/fp-run.sh <tool> …`.
 
@@ -63,9 +63,20 @@ Detail + recipes: **`matte/README.md`**. Dispatch: `bash scripts/fp-run.sh <tool
 | `path` | File or directory |
 | `--new` | Write sidecar instead of overwrite |
 | `--recursive` | Recurse into subfolders |
-| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (default **white**) — *recolor, knockout, despeckle* |
+| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (default **white**) — *recolor, cutout, knockout, despeckle* |
 | `--invert` | Flip coverage / greyscale (dark art on light) — *cutout, knockout, despeckle* |
 | `--gamma G` | Midtone gamma; `>1` = crisper (default `1.0`) — *cutout, knockout, despeckle* |
+
+#### Levels (shared language)
+
+Cutout, knockout, and despeckle accept **both** unit systems. Use **one system per end** (error if both set).
+
+| Unit | Flags | Range |
+|------|-------|--------|
+| Percent (native knockout/despeckle) | `--cutoff` / `--white` | **0–100** |
+| Raw luma (native cutout) | `--black-point` / `--white-point` | **0–255** |
+
+Conversion: `u8 = pct/100*255`, `pct = u8/255*100` (rounded when going to integer points).
 
 #### `recolor_png.py` / `recolor_svg.py`
 
@@ -74,6 +85,7 @@ Detail + recipes: **`matte/README.md`**. Dispatch: `bash scripts/fp-run.sh <tool
 | `--new` | off | Sidecar `*.recolor.png` / `*.recolor.svg` |
 | `--recursive` | off | Directory tree |
 | `--color` | `white` | Solid fill on paints / opaque pixels |
+| `--min-alpha` | `1` | **PNG only:** recolor when alpha ≥ N (1 = all nonzero; raise to skip fringe) |
 
 #### `cutout.py`
 
@@ -83,10 +95,12 @@ Detail + recipes: **`matte/README.md`**. Dispatch: `bash scripts/fp-run.sh <tool
 | `--recursive` | off | Directory tree |
 | `--black-point` | `8` | Luma ≤ N → alpha 0 (**0–255**) |
 | `--white-point` | `247` | Luma ≥ N → alpha 255 (**0–255**) |
+| `--cutoff` / `--white` | — | Percent aliases (0–100) for black/white point |
 | `--gamma` | `1.0` | Midtone gamma on alpha |
+| `--color` | `white` | Solid RGB fill where visible |
 | `--invert` | off | Dark glyph on light background |
 
-RGB always pure white where visible. JPEG needs `--new` (no alpha).
+JPEG needs `--new` (no alpha).
 
 #### `knockout.py`
 
@@ -97,6 +111,7 @@ RGB always pure white where visible. JPEG needs `--new` (no alpha).
 | `--force` | off | Reprocess tagged/named knockout products |
 | `--cutoff` | `0` | Levels black point **0–100** → alpha 0 |
 | `--white` | `100` | Levels white point **0–100** → alpha 255 |
+| `--black-point` / `--white-point` | — | Raw luma **0–255** aliases |
 | `--gamma` | `1.0` | Midtone gamma on alpha |
 | `--color` | `white` | Solid RGB fill |
 | `--invert` | off | Invert greyscale before levels |
@@ -109,19 +124,17 @@ RGB always pure white where visible. JPEG needs `--new` (no alpha).
 | `--recursive` | off | Directory tree |
 | `--mode` | `auto` | `auto` \| `alpha` \| `black` coverage |
 | `--min-area` | `4` | Drop 8-conn components &lt; N px (`0` = off) |
+| `--min-area-rel` | — | Fraction of long_edge² → effective pixel min-area (exclusive with `--min-area`) |
+| `--passes` | `1` | Repeat min-area + levels cleanup P times |
 | `--cutoff` | `1` | Levels black point **0–100** |
 | `--white` | `100` | Levels white point **0–100** |
+| `--black-point` / `--white-point` | — | Raw luma **0–255** aliases |
 | `--gamma` | `1.0` | Midtone gamma |
 | `--to-alpha` | off | BLACK mode: emit RGBA (fill + cleaned alpha) |
 | `--color` | (see help) | Fill when emitting alpha / with `--to-alpha` |
 | `--invert` | off | Invert coverage before cleanup |
 
-#### Levels units (don’t mix them)
-
-| Tool | Black / white flags | Range |
-|------|---------------------|--------|
-| `cutout` | `--black-point` / `--white-point` | **0–255** (raw luma) |
-| `knockout`, `despeckle` | `--cutoff` / `--white` | **0–100** (percent) |
+`--min-area-rel` formula: `effective = max(1, round(F * long_edge²))` (F=0 → off).
 
 #### Sidecars (`--new`)
 

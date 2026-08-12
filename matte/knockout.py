@@ -16,6 +16,7 @@ Usage:
   python knockout.py path/to/file.png --new        # → file.png.knockout.png
   python knockout.py path/to/file.jpg --new        # JPEG needs --new
   python knockout.py path/to/file.png --cutoff 5   # crush dark greys
+  python knockout.py path/to/file.png --black-point 13 --white-point 242  # 0–255 aliases
   python knockout.py path/to/file.png --color "#e13e13"
   python knockout.py path/to/file.png --invert     # dark art on light BG
   python knockout.py path/to/file.png --force      # reprocess hextile-pipe outputs
@@ -32,7 +33,7 @@ from pathlib import Path
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
-from colorutil import COLOR_HELP, parse_color
+from colorutil import COLOR_HELP, parse_color, resolve_levels_pct
 
 try:
     import numpy as np
@@ -316,16 +317,30 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--cutoff",
         type=float,
-        default=0.0,
+        default=None,
         metavar="PCT",
         help="Levels black point 0–100: brightness under this → alpha 0 (default 0)",
     )
     ap.add_argument(
         "--white",
         type=float,
-        default=100.0,
+        default=None,
         metavar="PCT",
         help="Levels white point 0–100: brightness at/above this → alpha 255 (default 100)",
+    )
+    ap.add_argument(
+        "--black-point",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Alias for --cutoff as raw luma 0–255 (mutually exclusive with --cutoff)",
+    )
+    ap.add_argument(
+        "--white-point",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Alias for --white as raw luma 0–255 (mutually exclusive with --white)",
     )
     ap.add_argument(
         "--gamma",
@@ -358,7 +373,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        _validate_levels(args.cutoff, args.white, args.gamma)
+        cutoff, white = resolve_levels_pct(
+            cutoff=args.cutoff,
+            white=args.white,
+            black_point=args.black_point,
+            white_point=args.white_point,
+            default_cutoff=0.0,
+            default_white=100.0,
+        )
+        _validate_levels(cutoff, white, args.gamma)
     except ValueError as e:
         print(f"ERR {e}", file=sys.stderr)
         return 1
@@ -389,8 +412,8 @@ def main(argv: list[str] | None = None) -> int:
             knockout_file(
                 src,
                 dest,
-                cutoff=args.cutoff,
-                white=args.white,
+                cutoff=cutoff,
+                white=white,
                 gamma=args.gamma,
                 color=fill,
                 invert=args.invert,
