@@ -42,8 +42,6 @@ except ImportError:
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 META_TOOL_KEY = "hextile-pipe-tool"
-# Accept legacy frog-pipe tags so old knockouts still detect as products
-META_TOOL_KEYS_READ = (META_TOOL_KEY, "frog-pipe-tool")
 META_TOOL_VALUE = "knockout"
 SIDECAR_MARKER = ".knockout.png"
 
@@ -116,11 +114,11 @@ def is_knockout_product(path: Path, im: Image.Image | None = None) -> bool:
         close = im is None
         try:
             meta = getattr(img, "text", None) or {}
-            if any(meta.get(k) == META_TOOL_VALUE for k in META_TOOL_KEYS_READ):
+            if meta.get(META_TOOL_KEY) == META_TOOL_VALUE:
                 return True
             # Pillow sometimes keeps info dict
             info = getattr(img, "info", None) or {}
-            if any(info.get(k) == META_TOOL_VALUE for k in META_TOOL_KEYS_READ):
+            if info.get(META_TOOL_KEY) == META_TOOL_VALUE:
                 return True
         finally:
             if close:
