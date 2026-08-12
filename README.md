@@ -1,4 +1,4 @@
-# phong-art-pipe
+# frog-art-pipe
 
 Loose bag of **studio utility scripts** for art assets — not a product pipeline.
 
@@ -8,12 +8,12 @@ Loose bag of **studio utility scripts** for art assets — not a product pipelin
 
 Use whatever you need; nothing requires anything else.
 
-GitHub: `github.com/ansonphong/phong-art-pipe`
+GitHub: `github.com/ansonphong/frog-art-pipe`
 
 ## Layout
 
 ```
-phong-art-pipe/
+frog-art-pipe/
   matte/                 Python CLIs (Pillow)
   illustrator/           ExtendScript (.jsx)
   photoshop/             Photoshop script design (WIP)
@@ -75,8 +75,8 @@ Large binaries (PNG/JPG/PSD/AI/PDF/…) use **Git LFS**.
 
 ```bash
 git lfs install
-git clone https://github.com/ansonphong/phong-art-pipe.git
-cd phong-art-pipe && git lfs pull
+git clone https://github.com/ansonphong/frog-art-pipe.git
+cd frog-art-pipe && git lfs pull
 ```
 
 | File | Role |
