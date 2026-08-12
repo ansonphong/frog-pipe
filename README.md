@@ -61,3 +61,28 @@ Run via **File → Scripts → Other Script…**
 ## License
 
 Private / studio tooling unless you add a LICENSE.
+
+## Git / LFS
+
+This repo uses **Git LFS** for large binary assets (PNG/JPG/PSD/AI/PDF/…).
+
+```bash
+# one-time per machine
+git lfs install
+
+# clone / pull
+git clone https://github.com/ansonphong/phong-art-pipe.git
+cd phong-art-pipe
+git lfs pull
+```
+
+Repo hygiene files:
+
+| File | Role |
+|------|------|
+| `.gitignore` | Python, OS, Adobe junk, secrets, generated `*.cutout.png` / `*.knockout.png` |
+| `.gitattributes` | LF text, LFS globs, linguist docs |
+| `.editorconfig` | indent / charset / newlines |
+| `.env.example` | template only — never commit `.env` |
+
+**Do not commit** export dumps or script prefs (`prefs.txt`, `export-report.txt`).
