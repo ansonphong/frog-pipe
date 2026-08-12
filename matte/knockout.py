@@ -312,6 +312,18 @@ def preflight_jobs(
         else:
             seen[key] = src
 
+    # Dest must not clobber a different queued source (e.g. --force --new on
+    # asset.png + asset.png.knockout.png would overwrite the latter mid-batch)
+    source_keys = {src.resolve() for src, _ in jobs}
+    for src, dest in jobs:
+        dkey = dest.resolve()
+        skey = src.resolve()
+        if dkey in source_keys and dkey != skey:
+            errors.append(
+                f"ERR destination is another queued source (would clobber mid-batch): "
+                f"{src} -> {dest}"
+            )
+
     if errors:
         raise SystemExit("\n".join(errors))
     return jobs
