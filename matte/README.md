@@ -68,20 +68,43 @@ python3 matte/knockout.py file.png --color 0,200,255
 python3 matte/knockout.py file.png --invert       # dark on light
 ```
 
+## Despeckle — `despeckle.py` (dust / freckles)
+
+Cleans small islands on **black-bg** or **transparent** art. Works on a
+**coverage** channel only (alpha or luminance) — not RGB blur.
+
+1. Mode `auto`: any `A < 255` → use alpha; else luminance  
+2. Drop 8-connected components smaller than `--min-area` (default 4)  
+3. Levels once (`--cutoff` / `--white` / `--gamma`)  
+4. Pack: alpha keeps RGB (or `--color`); black → grey-on-black (`--to-alpha` → matte)
+
+```bash
+python3 matte/despeckle.py file.png                 # overwrite
+python3 matte/despeckle.py folder/
+python3 matte/despeckle.py file.png --new           # → file.despeckle.png
+python3 matte/despeckle.py file.png --min-area 8 --cutoff 2
+python3 matte/despeckle.py file.png --mode black --to-alpha
+python3 matte/despeckle.py file.png --color white   # force fill when alpha out
+```
+
+Codex Sol review: min-area primary; morph open / blur **not** default (too destructive).
+
 | Need | Script |
 |------|--------|
 | Force fills/pixels white | `whiten_svg.py` / `whiten_png.py` |
 | White silhouette cutout (luminance→alpha, always white) | `cutout.py` |
 | Same idea + levels cutoff + any fill color | `knockout.py` |
+| Remove dust / freckles (black or transparent) | `despeckle.py` |
 
 ## Naming
 
 - `snake_case.py`, verb first
 - Format suffix only when engines differ (`whiten_svg` / `whiten_png`)
-- Sidecar outputs (`--new`): `*.white.*`, `*.cutout.png`, `*.knockout.png`
+- Sidecar outputs (`--new`): `*.white.*`, `*.cutout.png`, `*.knockout.png`, `*.despeckle.png`
 
 ## Notes
 
 - Folder mode is non-recursive unless `--recursive`.
-- Files already named `*.white.svg` / `*.white.png` / `*.cutout.png` / `*.knockout.png` are skipped so re-runs of `--new` are safe.
+- Files already named `*.white.svg` / `*.white.png` / `*.cutout.png` / `*.knockout.png` / `*.despeckle.png` are skipped so re-runs of `--new` are safe.
 - Default **overwrites** the source. Use `--new` when you want a sidecar copy.
+- `despeckle` is not fully idempotent if you raise cutoff/min-area between runs — prefer one clean pass from backup.

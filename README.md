@@ -34,6 +34,7 @@ python3 matte/whiten_svg.py icon.svg             # overwrites (default)
 python3 matte/whiten_png.py sprite.png
 python3 matte/cutout.py file.png
 python3 matte/knockout.py file.png
+python3 matte/despeckle.py file.png              # dust / freckles
 python3 matte/knockout.py file.png --new         # → file.knockout.png
 ```
 
@@ -43,6 +44,7 @@ python3 matte/knockout.py file.png --new         # → file.knockout.png
 | `whiten_png.py` | Opaque PNG pixels → pure white (keep alpha) |
 | `cutout.py` | White-on-black → pure white + transparent black |
 | `knockout.py` | Greyscale→alpha (levels) + solid fill color (default white) |
+| `despeckle.py` | Min-area dust removal on black or transparent coverage |
 
 Default **overwrites**. Flags (`--new`, `--recursive`, `--gamma`, …): **`matte/README.md`**.
 
