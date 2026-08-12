@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+*~
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+
+# Adobe / export junk
+**/Adobe After Effects Auto-Save/
+**/Adobe Premiere Pro Auto-Save/
+*.tmp
+~$*
+*.bak
+*.old
+
+# Script prefs / run reports (local machine)
+**/prefs.txt
+**/export-report.txt
+**/*-export-report.txt
+
+# Generated cutouts next to sources (optional keep; ignore if dropped in-repo)
+# *.cutout.png
+# *.knockout.png
+# *.white.png
+# *.white.svg
+
+# Logs
+*.log
+npm-debug.log*
+
+# Nested accidental git
+# (this repo IS the root — ignore sub-clones if any)
