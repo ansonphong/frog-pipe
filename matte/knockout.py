@@ -13,20 +13,25 @@ Usage:
   python knockout.py path/to/file.png              # overwrite (default)
   python knockout.py path/to/folder/
   python knockout.py path/to/folder/ --recursive
-  python knockout.py path/to/file.png --new        # → file.knockout.png
+  python knockout.py path/to/file.png --new        # → file.png.knockout.png
   python knockout.py path/to/file.jpg --new        # JPEG needs --new
   python knockout.py path/to/file.png --cutoff 5   # crush dark greys
   python knockout.py path/to/file.png --color "#e13e13"
   python knockout.py path/to/file.png --invert     # dark art on light BG
+  python knockout.py path/to/file.png --force      # reprocess frog-pipe outputs
 """
 from __future__ import annotations
 
 import argparse
+import math
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 try:
     import numpy as np
@@ -36,6 +41,9 @@ except ImportError:
     HAS_NUMPY = False
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
+META_TOOL_KEY = "frog-pipe-tool"
+META_TOOL_VALUE = "knockout"
+SIDECAR_MARKER = ".knockout.png"
 
 # Common named fills
 _NAMED = {
@@ -74,6 +82,15 @@ def parse_color(s: str) -> tuple[int, int, int]:
     )
 
 
+def _validate_levels(cutoff: float, white: float, gamma: float) -> None:
+    if not (math.isfinite(cutoff) and math.isfinite(white)):
+        raise ValueError("cutoff/white must be finite numbers")
+    if not 0.0 <= cutoff < white <= 100.0:
+        raise ValueError("need 0 <= cutoff < white <= 100")
+    if not (math.isfinite(gamma) and gamma > 0):
+        raise ValueError("gamma must be a finite number > 0")
+
+
 def _levels_u8(L: float, black: float, white: float, gamma: float) -> int:
     """Map luminance through levels → alpha 0–255."""
     if L <= black:
@@ -86,6 +103,31 @@ def _levels_u8(L: float, black: float, white: float, gamma: float) -> int:
     return int(round(min(1.0, max(0.0, t)) * 255))
 
 
+def is_knockout_product(path: Path, im: Image.Image | None = None) -> bool:
+    """True if this file was produced by knockout (sidecar name or PNG metadata)."""
+    if path.name.lower().endswith(SIDECAR_MARKER):
+        return True
+    if path.suffix.lower() != ".png":
+        return False
+    try:
+        img = im if im is not None else Image.open(path)
+        close = im is None
+        try:
+            meta = getattr(img, "text", None) or {}
+            if meta.get(META_TOOL_KEY) == META_TOOL_VALUE:
+                return True
+            # Pillow sometimes keeps info dict
+            info = getattr(img, "info", None) or {}
+            if info.get(META_TOOL_KEY) == META_TOOL_VALUE:
+                return True
+        finally:
+            if close:
+                img.close()
+    except Exception:
+        return False
+    return False
+
+
 def knockout_image(
     im: Image.Image,
     *,
@@ -96,10 +138,7 @@ def knockout_image(
     invert: bool = False,
 ) -> Image.Image:
     """Greyscale→alpha after levels; RGB = solid fill color."""
-    if not 0.0 <= cutoff < white <= 100.0:
-        raise ValueError("need 0 <= cutoff < white <= 100")
-    if gamma <= 0:
-        raise ValueError("gamma must be > 0")
+    _validate_levels(cutoff, white, gamma)
     fr, fg, fb = color
     if not all(0 <= c <= 255 for c in (fr, fg, fb)):
         raise ValueError("fill color components must be 0–255")
@@ -157,6 +196,26 @@ def knockout_image(
     return out
 
 
+def _pnginfo() -> PngInfo:
+    info = PngInfo()
+    info.add_text(META_TOOL_KEY, META_TOOL_VALUE)
+    return info
+
+
+def _atomic_save_png(img: Image.Image, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(suffix=".png", dir=str(dest.parent))
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    try:
+        img.save(tmp_path, format="PNG", pnginfo=_pnginfo())
+        os.replace(tmp_path, dest)
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def knockout_file(
     src: Path,
     dest: Path,
@@ -176,37 +235,86 @@ def knockout_file(
             color=color,
             invert=invert,
         )
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        out.save(dest, format="PNG")
+        _atomic_save_png(out, dest)
 
 
-def collect_images(path: Path, recursive: bool) -> list[Path]:
+def collect_images(path: Path, recursive: bool, *, force: bool) -> list[Path]:
     if path.is_file():
         if path.suffix.lower() not in IMAGE_EXTS:
             raise SystemExit(f"ERR not a PNG/JPG file: {path}")
-        return [path]
-    if not path.is_dir():
-        raise SystemExit(f"ERR path not found: {path}")
-    files: list[Path] = []
-    patterns = ("*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG")
-    if recursive:
-        for pat in patterns:
-            files.extend(path.glob(f"**/{pat}"))
+        files = [path]
+    elif path.is_dir():
+        if recursive:
+            candidates = path.rglob("*")
+        else:
+            candidates = path.iterdir()
+        files = sorted(
+            {
+                p
+                for p in candidates
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+            }
+        )
     else:
-        for pat in patterns:
-            files.extend(path.glob(pat))
-    files = sorted({p for p in files if p.is_file()})
-    return [p for p in files if not p.name.lower().endswith(".knockout.png")]
+        raise SystemExit(f"ERR path not found: {path}")
+
+    out: list[Path] = []
+    for p in files:
+        # Always skip knockout sidecars unless --force (and even then only if explicit file?)
+        if p.name.lower().endswith(SIDECAR_MARKER) and not force:
+            continue
+        if not force and is_knockout_product(p):
+            continue
+        out.append(p)
+    return out
 
 
 def dest_for(src: Path, new: bool) -> Path:
+    """Sidecar includes source extension so asset.png / asset.jpg never collide."""
     if new:
-        return src.with_name(f"{src.stem}.knockout.png")
+        # e.g. photo.png → photo.png.knockout.png ; photo.jpg → photo.jpg.knockout.png
+        ext = src.suffix.lower().lstrip(".") or "img"
+        return src.with_name(f"{src.stem}.{ext}{SIDECAR_MARKER}")
     if src.suffix.lower() in {".jpg", ".jpeg"}:
         raise SystemExit(
             f"ERR default overwrites PNG only (JPEG has no alpha); use --new: {src}"
         )
     return src
+
+
+def preflight_jobs(
+    files: list[Path], *, new: bool, force: bool
+) -> list[tuple[Path, Path]]:
+    """Resolve all destinations and validate *before* any write."""
+    jobs: list[tuple[Path, Path]] = []
+    errors: list[str] = []
+
+    for src in files:
+        try:
+            if not force and is_knockout_product(src):
+                errors.append(
+                    f"ERR already a knockout product (use --force to reprocess): {src}"
+                )
+                continue
+            dest = dest_for(src, new)
+            jobs.append((src, dest))
+        except SystemExit as e:
+            errors.append(str(e))
+
+    # Unique destinations
+    seen: dict[Path, Path] = {}
+    for src, dest in jobs:
+        key = dest.resolve()
+        if key in seen:
+            errors.append(
+                f"ERR destination collision: {seen[key]} and {src} both → {dest}"
+            )
+        else:
+            seen[key] = src
+
+    if errors:
+        raise SystemExit("\n".join(errors))
+    return jobs
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -220,9 +328,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--new",
         action="store_true",
-        help="Write sidecar file.knockout.png instead of overwriting",
+        help="Write sidecar stem.ext.knockout.png instead of overwriting",
     )
     ap.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow reprocessing files already tagged/named as knockout outputs",
+    )
     ap.add_argument(
         "--cutoff",
         type=float,
@@ -247,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
         "--color",
         type=str,
         default="white",
-        help='Fill RGB: name, #rrggbb, or r,g,b (default white)',
+        help="Fill RGB: name, #rrggbb, or r,g,b (default white)",
     )
     ap.add_argument(
         "--invert",
@@ -267,15 +380,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERR {e}", file=sys.stderr)
         return 1
 
-    if not 0.0 <= args.cutoff < args.white <= 100.0:
-        print(
-            "ERR need 0 <= --cutoff < --white <= 100",
-            file=sys.stderr,
-        )
+    try:
+        _validate_levels(args.cutoff, args.white, args.gamma)
+    except ValueError as e:
+        print(f"ERR {e}", file=sys.stderr)
         return 1
 
     try:
-        files = collect_images(path, args.recursive)
+        files = collect_images(path, args.recursive, force=args.force)
     except SystemExit as e:
         print(str(e), file=sys.stderr)
         return 1
@@ -284,10 +396,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERR no PNG/JPG files found under: {path}", file=sys.stderr)
         return 1
 
+    try:
+        jobs = preflight_jobs(files, new=args.new, force=args.force)
+    except SystemExit as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    if not jobs:
+        print(f"ERR nothing to process under: {path}", file=sys.stderr)
+        return 1
+
     errors = 0
-    for src in files:
+    for src, dest in jobs:
         try:
-            dest = dest_for(src, args.new)
             knockout_file(
                 src,
                 dest,
@@ -298,9 +419,6 @@ def main(argv: list[str] | None = None) -> int:
                 invert=args.invert,
             )
             print(f"OK  {src} -> {dest}")
-        except SystemExit as e:
-            print(str(e), file=sys.stderr)
-            errors += 1
         except Exception as e:
             print(f"ERR {src}: {e}", file=sys.stderr)
             errors += 1

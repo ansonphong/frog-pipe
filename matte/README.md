@@ -59,14 +59,18 @@ On a pure black background the greys match the original.
 ```bash
 python3 matte/knockout.py file.png                # overwrites, white fill
 python3 matte/knockout.py folder/
-python3 matte/knockout.py file.png --new          # → file.knockout.png
-python3 matte/knockout.py file.jpg --new          # JPEG needs --new (no alpha)
+python3 matte/knockout.py file.png --new          # → file.png.knockout.png
+python3 matte/knockout.py file.jpg --new          # → file.jpg.knockout.png
 python3 matte/knockout.py file.png --cutoff 5     # crush dark greys (0–100)
 python3 matte/knockout.py file.png --white 95     # levels white point
 python3 matte/knockout.py file.png --color "#e13e13"
 python3 matte/knockout.py file.png --color 0,200,255
 python3 matte/knockout.py file.png --invert       # dark on light
+python3 matte/knockout.py file.png --force        # reprocess tagged outputs
 ```
+
+Batch safety: preflight destinations before any write; unique sidecars per source
+extension; PNG metadata tags outputs; refuse reprocess unless `--force`.
 
 ## Despeckle — `despeckle.py` (dust / freckles)
 
