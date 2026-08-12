@@ -1,4 +1,4 @@
-# frog-art-pipe
+# 🐸 frog-art-pipe
 
 Loose bag of **studio utility scripts** for art assets — not a product pipeline.
 
