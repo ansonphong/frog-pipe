@@ -11,26 +11,25 @@ GitHub: `github.com/ansonphong/phong-art-pipe` (remote when you push)
 
 ```
 phong-art-pipe/
-  matte/                 Python CLIs (Pillow)
-  Adobe-Illustrator/     ExtendScript export grouped assets
-  Adobe-Photoshop/       Design: export selected layers (WIP)
+  matte/                          Python CLIs (Pillow)
+  adobe/
+    illustrator/                  ExtendScript export grouped assets
+    photoshop/                    Design: export selected layers (WIP)
   README.md
   .gitignore
 ```
+
+All paths: **lowercase**, **kebab-case** files, nested `adobe/<app>/`.
 
 ## Matte (Python)
 
 Requires: `pip install pillow` (numpy optional).
 
 ```bash
-# Force SVG / PNG paints white
+# From repo root:
 python3 matte/whiten_svg.py icon.svg
 python3 matte/whiten_png.py sprite.png --in-place
-
-# White glyph on black → pure white + transparent BG
 python3 matte/cutout_png.py file.png              # → file.cutout.png
-
-# Color/glow on black → keep color, black transparent
 python3 matte/knockout_black.py file.png          # → file.knockout.png
 ```
 
@@ -38,12 +37,26 @@ See `matte/README.md` for flags (`--in-place`, `--recursive`, `--gamma`, …).
 
 ## Adobe Illustrator
 
-`Adobe-Illustrator/export-grouped-assets.jsx` — select groups → dialog → export AI / SVG / PNG.  
-Design docs in the same folder. Run via **File → Scripts → Other Script…**
+`adobe/illustrator/export-grouped-assets.jsx` — select groups → dialog → export AI / SVG / PNG.
+
+| File | Role |
+|------|------|
+| `export-grouped-assets.jsx` | Runnable ExtendScript |
+| `export-grouped-assets-design.md` | Design SSOT |
+| `artboard-export-all-groups.md` | Original production brief |
+| `test-pure-helpers.js` | Pure-helper unit tests (no Illustrator) |
+
+Run via **File → Scripts → Other Script…**
 
 ## Adobe Photoshop
 
-`Adobe-Photoshop/export-selected-layers-design.md` — design for selected-layer PNG export (not implemented yet).
+`adobe/photoshop/export-selected-layers-design.md` — design for selected-layer PNG export (not implemented yet).
+
+## Naming conventions
+
+- Folders: `lowercase` / `kebab-case` (`adobe/illustrator`, not `Adobe-Illustrator`)
+- Docs & scripts: `kebab-case` (`export-grouped-assets.jsx`)
+- Python package folder: short noun (`matte/`)
 
 ## License
 

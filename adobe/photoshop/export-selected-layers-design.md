@@ -2,7 +2,7 @@
 
 **Status:** brainstorm → design draft (not implemented)  
 **Target script:** `export-selected-layers.jsx` (ExtendScript, Adobe Photoshop)  
-**Sibling:** `scripts/Adobe-Illustrator/export-grouped-assets.jsx` (parity where it makes sense)  
+**Sibling:** `adobe/illustrator/export-grouped-assets.jsx` (parity where it makes sense)  
 **Version target:** 0.1.0  
 **Updated:** 2026-08-08  
 
