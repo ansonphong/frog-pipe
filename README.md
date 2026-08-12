@@ -42,7 +42,7 @@ python3 matte/knockout.py file.png --new         # → file.knockout.png
 | `whiten_svg.py` | SVG fills/strokes → pure white |
 | `whiten_png.py` | Opaque PNG pixels → pure white (keep alpha) |
 | `cutout.py` | White-on-black → pure white + transparent black |
-| `knockout.py` | Color-on-black → keep color + transparent black |
+| `knockout.py` | Greyscale→alpha (levels) + solid fill color (default white) |
 
 Default **overwrites**. Flags (`--new`, `--recursive`, `--gamma`, …): **`matte/README.md`**.
 

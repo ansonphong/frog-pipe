@@ -46,29 +46,33 @@ python3 matte/cutout.py file.png --invert         # dark ink on white paper
 Algorithm: `alpha = curve(luminance)`; `RGB = white` where visible.
 JPEG cannot store alpha — use `--new` for `name.cutout.png`.
 
-## Knockout — `knockout.py` (color kept, black → transparent)
+## Knockout — `knockout.py` (greyscale → alpha, solid fill)
 
-Color-on-black PNG/JPG → RGBA PNG: **original color recovered**, **black transparent**.
-Soft neon/glow edges stay clean (un-premultiply against black — no dark fringe).
+Art-on-black PNG/JPG → RGBA PNG. Simple 3-step process:
+
+1. RGB → greyscale luminance  
+2. **Levels** on that grey (`--cutoff` / `--white`, 0–100%) → becomes **alpha**  
+3. **RGB** filled with `--color` (default pure white)
+
+On a pure black background the greys match the original.
 
 ```bash
-python3 matte/knockout.py file.png                # overwrites
+python3 matte/knockout.py file.png                # overwrites, white fill
 python3 matte/knockout.py folder/
 python3 matte/knockout.py file.png --new          # → file.knockout.png
 python3 matte/knockout.py file.jpg --new          # JPEG needs --new (no alpha)
-python3 matte/knockout.py file.png --black-point 8 --gamma 1.2
-python3 matte/knockout.py file.png --alpha-from lum
+python3 matte/knockout.py file.png --cutoff 5     # crush dark greys (0–100)
+python3 matte/knockout.py file.png --white 95     # levels white point
+python3 matte/knockout.py file.png --color "#e13e13"
+python3 matte/knockout.py file.png --color 0,200,255
 python3 matte/knockout.py file.png --invert       # dark on light
 ```
-
-Algorithm: `alpha = curve(max(R,G,B))` (or luminance); un-premultiply
-`RGB' = RGB / alpha` so dim glow becomes full color at partial opacity.
 
 | Need | Script |
 |------|--------|
 | Force fills/pixels white | `whiten_svg.py` / `whiten_png.py` |
-| White silhouette cutout | `cutout.py` |
-| Keep colors / glow | `knockout.py` |
+| White silhouette cutout (luminance→alpha, always white) | `cutout.py` |
+| Same idea + levels cutoff + any fill color | `knockout.py` |
 
 ## Naming
 
