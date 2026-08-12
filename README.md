@@ -11,15 +11,15 @@ GitHub: `github.com/ansonphong/phong-art-pipe` (remote when you push)
 
 ```
 phong-art-pipe/
-  matte/                          Python CLIs (Pillow)
-  adobe/
-    illustrator/                  ExtendScript export grouped assets
-    photoshop/                    Design: export selected layers (WIP)
+  matte/                 Python CLIs (Pillow)
+  illustrator/           ExtendScript export grouped assets
+  photoshop/             Design: export selected layers (WIP)
+  fixtures/              Optional sample assets (LFS)
   README.md
   .gitignore
 ```
 
-All paths: **lowercase**, **kebab-case** files, nested `adobe/<app>/`.
+All paths: **lowercase** folders, **kebab-case** files. Adobe apps are **top-level** (`illustrator/`, `photoshop/`), not nested under `adobe/`.
 
 ## Matte (Python)
 
@@ -37,7 +37,7 @@ See `matte/README.md` for flags (`--in-place`, `--recursive`, `--gamma`, …).
 
 ## Adobe Illustrator
 
-`adobe/illustrator/export-grouped-assets.jsx` — select groups → dialog → export AI / SVG / PNG.
+`illustrator/export-grouped-assets.jsx` — select groups → dialog → export AI / SVG / PNG.
 
 | File | Role |
 |------|------|
@@ -50,11 +50,11 @@ Run via **File → Scripts → Other Script…**
 
 ## Adobe Photoshop
 
-`adobe/photoshop/export-selected-layers-design.md` — design for selected-layer PNG export (not implemented yet).
+`photoshop/export-selected-layers-design.md` — design for selected-layer PNG export (not implemented yet).
 
 ## Naming conventions
 
-- Folders: `lowercase` / `kebab-case` (`adobe/illustrator`, not `Adobe-Illustrator`)
+- Folders: `lowercase` / `kebab-case` (`illustrator`, not `Adobe-Illustrator`)
 - Docs & scripts: `kebab-case` (`export-grouped-assets.jsx`)
 - Python package folder: short noun (`matte/`)
 
