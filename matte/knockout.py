@@ -6,13 +6,13 @@ Assumes art is composited on black (premultiplied). Alpha from brightness
 color at partial opacity — no dark fringe on light backgrounds.
 
 Usage:
-  python knockout_black.py path/to/file.png
-  python knockout_black.py path/to/file.jpg          # → file.knockout.png
-  python knockout_black.py path/to/folder/
-  python knockout_black.py path/to/folder/ --recursive
-  python knockout_black.py path/to/file.png --in-place
-  python knockout_black.py path/to/file.png --black-point 8 --gamma 1.2
-  python knockout_black.py path/to/file.png --alpha-from lum
+  python knockout.py path/to/file.png
+  python knockout.py path/to/file.jpg          # → file.knockout.png
+  python knockout.py path/to/folder/
+  python knockout.py path/to/folder/ --recursive
+  python knockout.py path/to/file.png --in-place
+  python knockout.py path/to/file.png --black-point 8 --gamma 1.2
+  python knockout.py path/to/file.png --alpha-from lum
 """
 from __future__ import annotations
 

@@ -4,13 +4,13 @@
 Uses luminance as alpha, forces RGB to white so edges never show a dark halo.
 
 Usage:
-  python cutout_png.py path/to/file.png
-  python cutout_png.py path/to/file.jpg          # → file.cutout.png
-  python cutout_png.py path/to/folder/
-  python cutout_png.py path/to/folder/ --recursive
-  python cutout_png.py path/to/file.png --in-place
-  python cutout_png.py path/to/file.png --black-point 12 --gamma 1.3
-  python cutout_png.py path/to/file.png --invert   # dark glyph on light BG
+  python cutout.py path/to/file.png
+  python cutout.py path/to/file.jpg          # → file.cutout.png
+  python cutout.py path/to/folder/
+  python cutout.py path/to/folder/ --recursive
+  python cutout.py path/to/file.png --in-place
+  python cutout.py path/to/file.png --black-point 12 --gamma 1.3
+  python cutout.py path/to/file.png --invert   # dark glyph on light BG
 """
 from __future__ import annotations
 
