@@ -1,19 +1,19 @@
-# 🐸 frog-pipe
+# ⬡ hextile-pipe
 
 Loose bag of **studio utility scripts** for art assets — not a product pipeline.
 
-- **Python** (`matte/`) — whiten, cutout, color knockout  
+- **Python** (`matte/`) — whiten, cutout, color knockout, despeckle  
 - **Illustrator** (`illustrator/`) — batch-export selected groups  
 - **Photoshop** (`photoshop/`) — design for layer export (jsx TBD)  
 
 Use whatever you need; nothing requires anything else.
 
-GitHub: `github.com/ansonphong/frog-pipe`
+GitHub: [`github.com/ansonphong/hextile-pipe`](https://github.com/ansonphong/hextile-pipe)
 
 ## Layout
 
 ```
-frog-pipe/
+hextile-pipe/
   matte/                 Python CLIs (Pillow)
   illustrator/           ExtendScript (.jsx)
   photoshop/             Photoshop script design (WIP)
@@ -78,8 +78,8 @@ Large binaries (PNG/JPG/PSD/AI/PDF/…) use **Git LFS**.
 
 ```bash
 git lfs install
-git clone https://github.com/ansonphong/frog-pipe.git
-cd frog-pipe && git lfs pull
+git clone https://github.com/ansonphong/hextile-pipe.git
+cd hextile-pipe && git lfs pull
 ```
 
 | File | Role |
