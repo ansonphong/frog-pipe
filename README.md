@@ -18,9 +18,9 @@ hextile-pipe/
   illustrator/           ExtendScript (.jsx)
   photoshop/             Photoshop script design (WIP)
   fixtures/              Optional sample assets (LFS)
-  scripts/               fp-run, doctor, plugin test
+  scripts/               fp-run, doctor, plugin test, smoke
   skills/                Claude/Codex plugin skills
-  README.md
+  README.md              SSOT docs (this file)
 ```
 
 **Conventions:** lowercase folders · Python `snake_case` · JSX/docs `kebab-case`.
@@ -29,10 +29,33 @@ hextile-pipe/
 
 ## Matte (Python)
 
-Requires: `pip install pillow` (numpy optional).
+Python utilities for artwork mattes: recolor silhouettes, cut black→transparent
+(glyph + fill), knock out black with a fill color, or despeckle dust.
+
+Requires: `pip install pillow` (numpy optional, speeds large images).
 
 **Default: overwrite the source.** Pass `--new` for a sidecar.  
-**`--color`** (where present): name · `#rgb` / `#rrggbb` · `r,g,b` — **default white**.
+**`--color`** (where present): name · `#rgb` / `#rrggbb` · `r,g,b` — **default white**.  
+Shared parser: `matte/colorutil.py`.
+
+Discover live flags anytime:
+
+```bash
+python3 matte/<tool>.py -h
+bash scripts/fp-run.sh <tool> -h
+bash scripts/fp-run.sh <tool> path/to/file.png --new
+bash scripts/smoke-matte-flags.sh   # synthetic regression smoke
+```
+
+### Quick map
+
+| Need | Script |
+|------|--------|
+| Force fills/pixels to a color (default white) | `recolor_svg.py` / `recolor_png.py` |
+| Glyph cutout (luma→alpha + solid fill color) | `cutout.py` |
+| Grey art on black → alpha + any fill color | `knockout.py` |
+| Remove dust / freckles (black or transparent) | `despeckle.py` |
+| Shared color + levels helpers (not a CLI) | `colorutil.py` |
 
 ```bash
 python3 matte/recolor_svg.py icon.svg
@@ -43,100 +66,167 @@ python3 matte/despeckle.py file.png --min-area-rel 0.0001 --passes 2
 python3 matte/knockout.py file.png --new          # sidecar
 ```
 
-| Script | What it does |
-|--------|----------------|
-| `recolor_svg.py` | SVG fills/strokes → solid color (default white) |
-| `recolor_png.py` | Opaque PNG pixels → solid color, keep alpha (default white) |
-| `cutout.py` | White-on-black → solid fill + transparent black (AA via luma) |
-| `knockout.py` | Greyscale→alpha (levels) + solid fill (default white) |
-| `despeckle.py` | Min-area dust removal on black or transparent coverage |
-| `colorutil.py` | Shared color + levels helpers (not a CLI) |
+### Levels language (shared)
 
-Detail + recipes: **`matte/README.md`**. Dispatch: `bash scripts/fp-run.sh <tool> …`.
+Cutout, knockout, and despeckle accept **both** unit systems. Use **one system per end** (error if both set).
 
-### Params (current)
+| Unit | Flags | Range | Native on |
+|------|-------|--------|-----------|
+| Percent | `--cutoff` / `--white` | **0–100** | knockout, despeckle |
+| Raw luma | `--black-point` / `--white-point` | **0–255** | cutout |
 
-#### Shared (most tools)
+Conversion: `u8 = pct/100*255`, `pct = u8/255*100` (rounded when going to integer points).
+
+### Shared flags (most tools)
 
 | Flag | Meaning |
 |------|---------|
 | `path` | File or directory |
 | `--new` | Write sidecar instead of overwrite |
 | `--recursive` | Recurse into subfolders |
-| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (default **white**) — *recolor, cutout, knockout, despeckle* |
+| `--color COLOR` | Fill RGB (default **white**) — *recolor, cutout, knockout, despeckle* |
 | `--invert` | Flip coverage / greyscale (dark art on light) — *cutout, knockout, despeckle* |
 | `--gamma G` | Midtone gamma; `>1` = crisper (default `1.0`) — *cutout, knockout, despeckle* |
 
-#### Levels (shared language)
+### SVG recolor — `recolor_svg.py`
 
-Cutout, knockout, and despeckle accept **both** unit systems. Use **one system per end** (error if both set).
+Sets shape fills and strokes to a solid color (default `#ffffff`).
+Leaves `fill="none"` and `url(...)` paints alone.
 
-| Unit | Flags | Range |
-|------|-------|--------|
-| Percent (native knockout/despeckle) | `--cutoff` / `--white` | **0–100** |
-| Raw luma (native cutout) | `--black-point` / `--white-point` | **0–255** |
-
-Conversion: `u8 = pct/100*255`, `pct = u8/255*100` (rounded when going to integer points).
-
-#### `recolor_png.py` / `recolor_svg.py`
-
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--new` | off | Sidecar `*.recolor.png` / `*.recolor.svg` |
-| `--recursive` | off | Directory tree |
-| `--color` | `white` | Solid fill on paints / opaque pixels |
-| `--min-alpha` | `1` | **PNG only:** recolor when alpha ≥ N (1 = all nonzero; raise to skip fringe) |
-
-#### `cutout.py`
+```bash
+python3 matte/recolor_svg.py icon.svg              # white, overwrites
+python3 matte/recolor_svg.py icon.svg --new        # → icon.recolor.svg
+python3 matte/recolor_svg.py icon.svg --color "#e13e13"
+python3 matte/recolor_svg.py ./icons/ --recursive
+```
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--new` | off | Sidecar `*.cutout.png` |
-| `--recursive` | off | Directory tree |
+| `--new` | off | Sidecar `file.recolor.svg` |
+| `--recursive` | off | Recurse subfolders |
+| `--color` | `white` | Fill/stroke color |
+
+### PNG recolor — `recolor_png.py`
+
+Sets RGB for pixels with alpha ≥ `--min-alpha` (default pure white).
+Fully transparent / sub-floor pixels keep their original RGB.
+
+```bash
+python3 matte/recolor_png.py sprite.png            # white, overwrites
+python3 matte/recolor_png.py sprite.png --new      # → sprite.recolor.png
+python3 matte/recolor_png.py sprite.png --color red
+python3 matte/recolor_png.py sprite.png --color "#e13e13" --min-alpha 16
+python3 matte/recolor_png.py ./sprites/ --recursive
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--new` | off | Sidecar `file.recolor.png` |
+| `--recursive` | off | Recurse subfolders |
+| `--color` | `white` | RGB fill |
+| `--min-alpha` | `1` | Only recolor when alpha ≥ N (1 = all nonzero; 8–16 skips AA fringe) |
+
+### Cutout — `cutout.py`
+
+White-on-black PNG/JPG → RGBA: **solid fill RGB** (default white), **black transparent**,
+anti-alias via luminance→alpha.
+
+```bash
+python3 matte/cutout.py file.png                  # white fill, overwrites
+python3 matte/cutout.py file.png --new            # → file.cutout.png
+python3 matte/cutout.py file.png --color "#e13e13"
+python3 matte/cutout.py file.png --black-point 12 --gamma 1.3
+python3 matte/cutout.py file.png --cutoff 5 --white 97   # percent aliases
+python3 matte/cutout.py file.png --invert
+python3 matte/cutout.py file.jpg --new            # JPEG needs --new
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--new` | off | Sidecar `file.cutout.png` |
+| `--recursive` | off | Recurse subfolders |
 | `--black-point` | `8` | Luma ≤ N → alpha 0 (**0–255**) |
 | `--white-point` | `247` | Luma ≥ N → alpha 255 (**0–255**) |
-| `--cutoff` / `--white` | — | Percent aliases (0–100) for black/white point |
-| `--gamma` | `1.0` | Midtone gamma on alpha |
-| `--color` | `white` | Solid RGB fill where visible |
-| `--invert` | off | Dark glyph on light background |
+| `--cutoff` / `--white` | — | Percent **0–100** aliases |
+| `--gamma` | `1.0` | Midtone gamma |
+| `--color` | `white` | Solid RGB where visible |
+| `--invert` | off | Dark glyph on light BG |
 
 JPEG needs `--new` (no alpha).
 
-#### `knockout.py`
+### Knockout — `knockout.py`
+
+Art-on-black PNG/JPG → RGBA:
+
+1. RGB → greyscale luminance  
+2. **Levels** (`--cutoff` / `--white`, **0–100%**) → **alpha**  
+3. **RGB** filled with `--color` (default pure white)
+
+```bash
+python3 matte/knockout.py file.png                # white fill
+python3 matte/knockout.py file.png --new          # → file.png.knockout.png
+python3 matte/knockout.py file.png --cutoff 5 --white 95
+python3 matte/knockout.py file.png --black-point 13 --white-point 242
+python3 matte/knockout.py file.png --color "#e13e13"
+python3 matte/knockout.py file.png --force
+python3 matte/knockout.py file.jpg --new
+```
 
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--new` | off | Sidecar `stem.ext.knockout.png` |
-| `--recursive` | off | Directory tree |
-| `--force` | off | Reprocess tagged/named knockout products |
-| `--cutoff` | `0` | Levels black point **0–100** → alpha 0 |
-| `--white` | `100` | Levels white point **0–100** → alpha 255 |
-| `--black-point` / `--white-point` | — | Raw luma **0–255** aliases |
-| `--gamma` | `1.0` | Midtone gamma on alpha |
-| `--color` | `white` | Solid RGB fill |
-| `--invert` | off | Invert greyscale before levels |
+| `--recursive` | off | Recurse |
+| `--force` | off | Reprocess knockout products |
+| `--cutoff` | `0` | Black point **0–100** → alpha 0 |
+| `--white` | `100` | White point **0–100** → alpha 255 |
+| `--black-point` / `--white-point` | — | Raw **0–255** aliases |
+| `--gamma` | `1.0` | Midtone gamma |
+| `--color` | `white` | Solid fill |
+| `--invert` | off | Invert greyscale first |
 
-#### `despeckle.py`
+PNG metadata `hextile-pipe-tool=knockout`; refuse reprocess unless `--force`.
+Batch safety: preflight destinations; unique sidecars per source extension.
+
+### Despeckle — `despeckle.py`
+
+Coverage-channel cleanup (alpha or luminance) — not RGB blur.
+
+1. Mode `auto`: any `A < 255` → alpha; else luminance  
+2. Drop 8-connected components &lt; `--min-area` or scale-aware `--min-area-rel`  
+3. Levels once  
+4. Optional `--passes P` repeats steps 2–3  
+
+```bash
+python3 matte/despeckle.py file.png
+python3 matte/despeckle.py file.png --new
+python3 matte/despeckle.py file.png --min-area 64
+python3 matte/despeckle.py file.png --min-area-rel 0.0001   # scales with long_edge²
+python3 matte/despeckle.py file.png --passes 2
+python3 matte/despeckle.py file.png --mode black --to-alpha --color white
+python3 matte/despeckle.py file.png --black-point 3         # 0–255 alias
+```
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--new` | off | Sidecar `*.despeckle.png` |
-| `--recursive` | off | Directory tree |
-| `--mode` | `auto` | `auto` \| `alpha` \| `black` coverage |
-| `--min-area` | `4` | Drop 8-conn components &lt; N px (`0` = off) |
-| `--min-area-rel` | — | Fraction of long_edge² → effective pixel min-area (exclusive with `--min-area`) |
-| `--passes` | `1` | Repeat min-area + levels cleanup P times |
-| `--cutoff` | `1` | Levels black point **0–100** |
-| `--white` | `100` | Levels white point **0–100** |
-| `--black-point` / `--white-point` | — | Raw luma **0–255** aliases |
+| `--new` | off | Sidecar `file.despeckle.png` |
+| `--recursive` | off | Recurse |
+| `--mode` | `auto` | `auto` \| `alpha` \| `black` |
+| `--min-area` | `4` | Absolute pixel threshold (`0` = off) |
+| `--min-area-rel` | — | Fraction of long_edge² (exclusive with `--min-area`) |
+| `--passes` | `1` | Repeat cleanup P times |
+| `--cutoff` | `1` | Levels black **0–100** |
+| `--white` | `100` | Levels white **0–100** |
+| `--black-point` / `--white-point` | — | Raw **0–255** aliases |
 | `--gamma` | `1.0` | Midtone gamma |
-| `--to-alpha` | off | BLACK mode: emit RGBA (fill + cleaned alpha) |
-| `--color` | (see help) | Fill when emitting alpha / with `--to-alpha` |
-| `--invert` | off | Invert coverage before cleanup |
+| `--to-alpha` | off | BLACK → RGBA |
+| `--color` | (see help) | Fill when emitting alpha |
+| `--invert` | off | Invert coverage first |
 
-`--min-area-rel` formula: `effective = max(1, round(F * long_edge²))` (F=0 → off).
+`--min-area-rel F` → `effective = max(1, round(F * long_edge²))` (F=0 → off).
 
-#### Sidecars (`--new`)
+High-res freckles: prefer relative, or absolute 32–64+, and/or `--passes 2`.
+
+### Sidecars (`--new`)
 
 | Tool | Output name |
 |------|-------------|
@@ -145,7 +235,16 @@ JPEG needs `--new` (no alpha).
 | knockout | `file.ext.knockout.png` (e.g. `a.png.knockout.png`) |
 | despeckle | `file.despeckle.png` |
 
-Legacy: `fp-run.sh` still accepts `whiten_png` / `whiten_svg` → recolor tools.
+### Naming & notes
+
+- `snake_case.py`, verb first  
+- Format suffix only when engines differ (`recolor_svg` / `recolor_png`)  
+- Shared helpers: `colorutil.py`  
+- Folder mode is non-recursive unless `--recursive`  
+- Sidecar-named files are skipped on re-run so `--new` is safe (recolor also skips legacy `*.white.*`)  
+- Default **overwrites** the source  
+- `despeckle` is not fully idempotent if you raise cutoff/min-area between runs — prefer one clean pass from backup  
+- Old names `whiten_svg` / `whiten_png` still work via `scripts/fp-run.sh` aliases  
 
 ---
 
