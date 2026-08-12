@@ -30,10 +30,11 @@ frog-pipe/
 Requires: `pip install pillow` (numpy optional).
 
 ```bash
-python3 matte/whiten_svg.py icon.svg
-python3 matte/whiten_png.py sprite.png --in-place
-python3 matte/cutout.py file.png                 # → file.cutout.png
-python3 matte/knockout.py file.png               # → file.knockout.png
+python3 matte/whiten_svg.py icon.svg             # overwrites (default)
+python3 matte/whiten_png.py sprite.png
+python3 matte/cutout.py file.png
+python3 matte/knockout.py file.png
+python3 matte/knockout.py file.png --new         # → file.knockout.png
 ```
 
 | Script | What it does |
@@ -43,7 +44,7 @@ python3 matte/knockout.py file.png               # → file.knockout.png
 | `cutout.py` | White-on-black → pure white + transparent black |
 | `knockout.py` | Color-on-black → keep color + transparent black |
 
-Flags (`--in-place`, `--recursive`, `--gamma`, …): **`matte/README.md`**.
+Default **overwrites**. Flags (`--new`, `--recursive`, `--gamma`, …): **`matte/README.md`**.
 
 ---
 

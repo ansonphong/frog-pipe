@@ -4,11 +4,11 @@
 Uses luminance as alpha, forces RGB to white so edges never show a dark halo.
 
 Usage:
-  python cutout.py path/to/file.png
-  python cutout.py path/to/file.jpg          # → file.cutout.png
+  python cutout.py path/to/file.png          # overwrites (default)
   python cutout.py path/to/folder/
   python cutout.py path/to/folder/ --recursive
-  python cutout.py path/to/file.png --in-place
+  python cutout.py path/to/file.png --new    # → file.cutout.png
+  python cutout.py path/to/file.jpg --new    # JPEG needs --new (no alpha)
   python cutout.py path/to/file.png --black-point 12 --gamma 1.3
   python cutout.py path/to/file.png --invert   # dark glyph on light BG
 """
@@ -142,25 +142,30 @@ def collect_images(path: Path, recursive: bool) -> list[Path]:
     return [p for p in files if not p.name.lower().endswith(".cutout.png")]
 
 
-def dest_for(src: Path, in_place: bool) -> Path:
-    if in_place:
-        if src.suffix.lower() in {".jpg", ".jpeg"}:
-            raise SystemExit(
-                f"ERR --in-place requires PNG source (JPEG cannot store alpha): {src}"
-            )
-        return src
-    return src.with_name(f"{src.stem}.cutout.png")
+def dest_for(src: Path, new: bool) -> Path:
+    if new:
+        return src.with_name(f"{src.stem}.cutout.png")
+    if src.suffix.lower() in {".jpg", ".jpeg"}:
+        raise SystemExit(
+            f"ERR default overwrites PNG only (JPEG has no alpha); use --new: {src}"
+        )
+    return src
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=(
             "White-on-black image → pure white + transparent black (crisp AA). "
-            "Luminance becomes alpha; RGB forced to white."
+            "Luminance becomes alpha; RGB forced to white. "
+            "Default: overwrite source PNG."
         )
     )
     ap.add_argument("path", type=Path, help="PNG/JPG file or directory")
-    ap.add_argument("--in-place", action="store_true", help="Overwrite source PNG")
+    ap.add_argument(
+        "--new",
+        action="store_true",
+        help="Write sidecar file.cutout.png instead of overwriting",
+    )
     ap.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
     ap.add_argument(
         "--black-point",
@@ -205,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = 0
     for src in files:
         try:
-            dest = dest_for(src, args.in_place)
+            dest = dest_for(src, args.new)
             cutout_file(
                 src,
                 dest,

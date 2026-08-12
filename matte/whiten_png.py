@@ -2,10 +2,10 @@
 """Whiten all opaque (and semi-transparent) PNG pixels; keep alpha.
 
 Usage:
-  python whiten_png.py path/to/file.png
+  python whiten_png.py path/to/file.png          # overwrites (default)
   python whiten_png.py path/to/folder/
   python whiten_png.py path/to/folder/ --recursive
-  python whiten_png.py path/to/file.png --in-place
+  python whiten_png.py path/to/file.png --new    # → file.white.png
 """
 from __future__ import annotations
 
@@ -62,18 +62,25 @@ def collect_pngs(path: Path, recursive: bool) -> list[Path]:
     return [p for p in files if not p.name.lower().endswith(".white.png")]
 
 
-def dest_for(src: Path, in_place: bool) -> Path:
-    if in_place:
-        return src
-    return src.with_name(f"{src.stem}.white{src.suffix}")
+def dest_for(src: Path, new: bool) -> Path:
+    if new:
+        return src.with_name(f"{src.stem}.white{src.suffix}")
+    return src
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Force PNG opaque pixels to pure white; preserve alpha."
+        description=(
+            "Force PNG opaque pixels to pure white; preserve alpha. "
+            "Default: overwrite source."
+        )
     )
     ap.add_argument("path", type=Path, help="PNG file or directory")
-    ap.add_argument("--in-place", action="store_true", help="Overwrite source files")
+    ap.add_argument(
+        "--new",
+        action="store_true",
+        help="Write sidecar file.white.png instead of overwriting",
+    )
     ap.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
     args = ap.parse_args(argv)
 
@@ -94,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
 
     errors = 0
     for src in files:
-        dest = dest_for(src, args.in_place)
+        dest = dest_for(src, args.new)
         try:
             whiten_png_file(src, dest)
             print(f"OK  {src} -> {dest}")

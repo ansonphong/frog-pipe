@@ -6,11 +6,11 @@ Assumes art is composited on black (premultiplied). Alpha from brightness
 color at partial opacity — no dark fringe on light backgrounds.
 
 Usage:
-  python knockout.py path/to/file.png
-  python knockout.py path/to/file.jpg          # → file.knockout.png
+  python knockout.py path/to/file.png          # overwrites (default)
   python knockout.py path/to/folder/
   python knockout.py path/to/folder/ --recursive
-  python knockout.py path/to/file.png --in-place
+  python knockout.py path/to/file.png --new    # → file.knockout.png
+  python knockout.py path/to/file.jpg --new    # JPEG needs --new (no alpha)
   python knockout.py path/to/file.png --black-point 8 --gamma 1.2
   python knockout.py path/to/file.png --alpha-from lum
 """
@@ -173,25 +173,30 @@ def collect_images(path: Path, recursive: bool) -> list[Path]:
     return [p for p in files if not p.name.lower().endswith(".knockout.png")]
 
 
-def dest_for(src: Path, in_place: bool) -> Path:
-    if in_place:
-        if src.suffix.lower() in {".jpg", ".jpeg"}:
-            raise SystemExit(
-                f"ERR --in-place requires PNG source (JPEG cannot store alpha): {src}"
-            )
-        return src
-    return src.with_name(f"{src.stem}.knockout.png")
+def dest_for(src: Path, new: bool) -> Path:
+    if new:
+        return src.with_name(f"{src.stem}.knockout.png")
+    if src.suffix.lower() in {".jpg", ".jpeg"}:
+        raise SystemExit(
+            f"ERR default overwrites PNG only (JPEG has no alpha); use --new: {src}"
+        )
+    return src
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=(
             "Color-on-black image → keep color, black transparent. "
-            "Alpha from brightness; un-premultiply so glow edges stay clean."
+            "Alpha from brightness; un-premultiply so glow edges stay clean. "
+            "Default: overwrite source PNG."
         )
     )
     ap.add_argument("path", type=Path, help="PNG/JPG file or directory")
-    ap.add_argument("--in-place", action="store_true", help="Overwrite source PNG")
+    ap.add_argument(
+        "--new",
+        action="store_true",
+        help="Write sidecar file.knockout.png instead of overwriting",
+    )
     ap.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
     ap.add_argument(
         "--black-point",
@@ -242,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = 0
     for src in files:
         try:
-            dest = dest_for(src, args.in_place)
+            dest = dest_for(src, args.new)
             knockout_file(
                 src,
                 dest,

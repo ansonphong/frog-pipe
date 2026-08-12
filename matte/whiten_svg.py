@@ -2,10 +2,10 @@
 """Whiten all SVG shape paints (fill/stroke → #ffffff). Keeps structure.
 
 Usage:
-  python whiten_svg.py path/to/file.svg
+  python whiten_svg.py path/to/file.svg          # overwrites (default)
   python whiten_svg.py path/to/folder/
   python whiten_svg.py path/to/folder/ --recursive
-  python whiten_svg.py path/to/file.svg --in-place
+  python whiten_svg.py path/to/file.svg --new    # → file.white.svg
 """
 from __future__ import annotations
 
@@ -101,16 +101,24 @@ def collect_svgs(path: Path, recursive: bool) -> list[Path]:
     return [p for p in files if not p.name.lower().endswith(".white.svg")]
 
 
-def dest_for(src: Path, in_place: bool) -> Path:
-    if in_place:
-        return src
-    return src.with_name(f"{src.stem}.white{src.suffix}")
+def dest_for(src: Path, new: bool) -> Path:
+    if new:
+        return src.with_name(f"{src.stem}.white{src.suffix}")
+    return src
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Force SVG shape paints to pure white.")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Force SVG shape paints to pure white. Default: overwrite source."
+        )
+    )
     ap.add_argument("path", type=Path, help="SVG file or directory")
-    ap.add_argument("--in-place", action="store_true", help="Overwrite source files")
+    ap.add_argument(
+        "--new",
+        action="store_true",
+        help="Write sidecar file.white.svg instead of overwriting",
+    )
     ap.add_argument("--recursive", action="store_true", help="Recurse into subfolders")
     args = ap.parse_args(argv)
 
@@ -131,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
 
     errors = 0
     for src in files:
-        dest = dest_for(src, args.in_place)
+        dest = dest_for(src, args.new)
         try:
             whiten_svg_file(src, dest)
             print(f"OK  {src} -> {dest}")
