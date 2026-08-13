@@ -20,6 +20,8 @@ hextile-pipe/
   fixtures/              Optional sample assets (LFS)
   scripts/               fp-run, doctor, plugin test, smoke
   skills/                Claude/Codex plugin skills
+  references/            Extra notes (adobe-manual.md)
+  requirements.txt       pillow>=10 (numpy optional)
   README.md              SSOT docs (this file)
 ```
 
@@ -32,11 +34,17 @@ hextile-pipe/
 Python utilities for artwork mattes: recolor silhouettes, cut black→transparent
 (glyph + fill), knock out black with a fill color, or despeckle dust.
 
-Requires: `pip install pillow` (numpy optional, speeds large images).
+Requires: `pip install -r requirements.txt` (`pillow>=10`). Numpy is optional (speeds large knockout/despeckle).
 
-**Default: overwrite the source.** Pass `--new` for a sidecar.  
-**`--color`** (where present): name · `#rgb` / `#rrggbb` · `r,g,b` — **default white**.  
-Shared parser: `matte/colorutil.py`.
+**Default: overwrite the source.** Pass `--new` for a sidecar.
+
+**`--color`** (recolor, cutout, knockout, and despeckle when emitting alpha):
+name · `#rgb` / `#rrggbb` · `r,g,b`. Shared parser: `matte/colorutil.py`.
+
+| Names | `white` `black` `red` `green` `blue` `cyan` `magenta` `yellow` |
+|-------|----------------------------------------------------------------|
+| Default | **white** on recolor / cutout / knockout |
+| Despeckle | no default fill — omit to **preserve RGB** in alpha mode; **white** when `--to-alpha` is set (or pass `--color` to override) |
 
 Discover live flags anytime:
 
@@ -84,7 +92,7 @@ Conversion: `u8 = pct/100*255`, `pct = u8/255*100` (rounded when going to intege
 | `path` | File or directory |
 | `--new` | Write sidecar instead of overwrite |
 | `--recursive` | Recurse into subfolders |
-| `--color COLOR` | Fill RGB (default **white**) — *recolor, cutout, knockout, despeckle* |
+| `--color COLOR` | Fill RGB — *recolor / cutout / knockout default white; despeckle only when emitting alpha* |
 | `--invert` | Flip coverage / greyscale (dark art on light) — *cutout, knockout, despeckle* |
 | `--gamma G` | Midtone gamma; `>1` = crisper (default `1.0`) — *cutout, knockout, despeckle* |
 
@@ -218,8 +226,8 @@ python3 matte/despeckle.py file.png --black-point 3         # 0–255 alias
 | `--white` | `100` | Levels white **0–100** |
 | `--black-point` / `--white-point` | — | Raw **0–255** aliases |
 | `--gamma` | `1.0` | Midtone gamma |
-| `--to-alpha` | off | BLACK → RGBA |
-| `--color` | (see help) | Fill when emitting alpha |
+| `--to-alpha` | off | BLACK → RGBA (grey-on-black otherwise) |
+| `--color` | unset | Fill when emitting alpha: preserve RGB in `--mode alpha`; white if `--to-alpha` |
 | `--invert` | off | Invert coverage first |
 
 `--min-area-rel F` → `effective = max(1, round(F * long_edge²))` (F=0 → off).
@@ -248,18 +256,108 @@ High-res freckles: prefer relative, or absolute 32–64+, and/or `--passes 2`.
 
 ---
 
+## Scripts (bash)
+
+Wrappers and smokes. **No extra flags of their own** except the first positional tool name on `fp-run`. Everything after that is passed through to the Python CLI.
+
+### `fp-run.sh` — dispatch a matte CLI
+
+```bash
+bash scripts/fp-run.sh <tool> [args…]     # same args as matte/<tool>.py
+bash scripts/fp-run.sh cutout -h
+bash scripts/fp-run.sh recolor_png sprite.png --color red --new
+```
+
+| Tool name | Runs | Also accepted |
+|-----------|------|----------------|
+| `recolor_svg` | `matte/recolor_svg.py` | `recolor-svg`, `whiten_svg`, `whiten-svg` |
+| `recolor_png` | `matte/recolor_png.py` | `recolor-png`, `whiten_png`, `whiten-png` |
+| `cutout` | `matte/cutout.py` | — |
+| `knockout` | `matte/knockout.py` | — |
+| `despeckle` | `matte/despeckle.py` | — |
+
+Resolves the plugin root via `scripts/lib/plugin-root.sh` (env `HEXTILE_PIPE_PLUGIN_ROOT` / `CLAUDE_PLUGIN_ROOT` / `GROK_PLUGIN_ROOT` / `PLUGIN_ROOT`, else walk up from the script). Unknown tool → exit 2.
+
+### `fp-doctor.sh` — install health
+
+```bash
+bash scripts/fp-doctor.sh
+```
+
+No args. Hard-fail if layout, any of the 5 matte scripts, `colorutil.py`, Pillow, `fp-run <tool> -h`, plugin name, or Claude/Codex version lockstep is broken. Soft-warn if numpy is missing. Exit 1 on any fail.
+
+### `test-plugin.sh` — packaging smoke
+
+```bash
+bash scripts/test-plugin.sh
+```
+
+No args. Synthetic SVG/PNG only (no LFS). Checks manifests, skill names, no `frog` leak, doctor + `fp-run` from `/tmp`, sidecar writes for all 5 tools.
+
+### `smoke-matte-flags.sh` — flag regression
+
+```bash
+bash scripts/smoke-matte-flags.sh
+```
+
+No args. Optional `SMOKE_SCRATCH=/tmp/foo`. Asserts `--color`, `--min-alpha`, `--min-area-rel`, `--passes`, and levels aliases on synthetic pixels.
+
+### `lib/plugin-root.sh`
+
+Not a CLI. Sourced by `fp-run` / `fp-doctor` to find the package root.
+
+---
+
 ## Illustrator
 
-`illustrator/export-grouped-assets.jsx` — select groups → dialog → export AI / SVG / PNG.
+`illustrator/export-grouped-assets.jsx` — select **GroupItems** → dialog → export AI / SVG / PNG.
+
+Run: **File → Scripts → Other Script…**
 
 | File | Role |
 |------|------|
-| `export-grouped-assets.jsx` | Runnable ExtendScript |
+| `export-grouped-assets.jsx` | Runnable ExtendScript (v0.2.7) |
 | `export-grouped-assets-design.md` | Design notes |
 | `artboard-export-all-groups.md` | Earlier brief |
 | `test-pure-helpers.js` | Pure-helper tests (no Illustrator) |
 
-Run: **File → Scripts → Other Script…**
+### Dialog / prefs (defaults from `defaultPrefs()`)
+
+Not a CLI — these are dialog fields, persisted to `prefs.txt`.
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| Output folder | last used / empty | Destination; **Browse** |
+| Prefix | `""` | Name stem (trailing hyphens stripped) |
+| Depth | `1` | `1` selected groups `PREFIX-##` · `2` children `PREFIX-A-##` · `3` grandchildren `PREFIX-A-##-##` |
+| Start # | `1` | Sequence start |
+| Pad digits | `2` | Zero-pad width (`01`, `02`, …) |
+| Export AI / SVG / PNG | all **on** | Per-format enable |
+| Top-level (per format) | all **on** | On = dump in output root; off = `AI/` `SVG/` `PNG/` subfolder |
+| PNG target px | `2048` | Hard max longest edge (never overshoots) |
+| Canvas | `square` | `square` or `tight` |
+| Padding % | `5` | Pad around visible bounds (`pct/100 * max(w,h)` on all sides) |
+| Overwrite | off | Else collide → `_002` suffix |
+| Open folder | off | Reveal output when done |
+
+PNG scale is searched so predicted pixels stay **≤ targetPx**. Root letter `A,B,C…` is **selection order**, not group names.
+
+---
+
+## Skills (plugin)
+
+Agent wrappers under `skills/` — they call `fp-run.sh`, they are not extra CLIs.
+
+| Skill | Tool |
+|-------|------|
+| `hextile-pipe` | Hub + doctor |
+| `hextile-recolor-svg` | `recolor_svg` |
+| `hextile-recolor-png` | `recolor_png` |
+| `hextile-cutout` | `cutout` |
+| `hextile-knockout` | `knockout` |
+| `hextile-despeckle` | `despeckle` |
+
+Agent default in skills: pass `--new` unless the user insists on overwrite.
 
 ---
 
@@ -286,6 +384,7 @@ cd hextile-pipe && git lfs pull
 | `.gitattributes` | LF text + LFS globs |
 | `.editorconfig` | indent / charset / newlines |
 | `.env.example` | template only — never commit `.env` |
+| `requirements.txt` | `pillow>=10`; numpy not required |
 
 Don’t commit export dumps or machine prefs (`prefs.txt`, `export-report.txt`).
 
