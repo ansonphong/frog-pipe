@@ -34,7 +34,7 @@ for tool, flags in {
     "cutout.py": ["--color", "--cutoff", "--black-point"],
     "recolor_png.py": ["--min-alpha", "--color"],
     "despeckle.py": ["--min-area-rel", "--passes", "--black-point"],
-    "knockout.py": ["--black-point", "--cutoff", "--silhouette", "--blur", "--lo", "--hi"],
+    "knockout.py": ["--black-point", "--cutoff", "--silhouette", "--wand", "--blur", "--lo", "--hi"],
 }.items():
     text = subprocess.check_output([py, str(root / "matte" / tool), "-h"], text=True)
     for f in flags:
@@ -176,6 +176,37 @@ bout = np.array(Image.open(blk).convert("RGBA"))
 assert list(bout[48, 48]) == [128, 128, 128, 255], bout[48, 48]
 assert int(bout[0, 0, 3]) == 0
 assert int(((bout[:, :, 3] > 8) & (bout[:, :, 3] < 247)).sum()) > 10
+
+# --- knockout --wand keeps enclosed black; --silhouette keys it ---
+frame = scratch / "wand_frame.png"
+fimg = Image.new("RGB", (48, 48), (0, 0, 0))
+for y in range(8, 40):
+    for x in range(8, 40):
+        fimg.putpixel((x, y), (220, 220, 220))
+for y in range(16, 32):
+    for x in range(16, 32):
+        fimg.putpixel((x, y), (0, 0, 0))
+fimg.save(frame)
+sil_frame = scratch / "wand_frame.sil.png"
+wand_frame = scratch / "wand_frame.wand.png"
+fimg.save(sil_frame)
+fimg.save(wand_frame)
+run([
+    str(root / "matte/knockout.py"), str(sil_frame),
+    "--silhouette", "--cutoff", "3", "--blur", "0", "--force",
+])
+run([
+    str(root / "matte/knockout.py"), str(wand_frame),
+    "--wand", "--cutoff", "3", "--blur", "0", "--force",
+])
+sil_arr = np.array(Image.open(sil_frame).convert("RGBA"))
+wand_arr = np.array(Image.open(wand_frame).convert("RGBA"))
+assert list(sil_arr[0, 0]) == [0, 0, 0, 0], sil_arr[0, 0]
+assert list(wand_arr[0, 0]) == [0, 0, 0, 0], wand_arr[0, 0]
+assert list(sil_arr[24, 8])[:3] == [220, 220, 220] and int(sil_arr[24, 8, 3]) == 255
+assert list(wand_arr[24, 8])[:3] == [220, 220, 220] and int(wand_arr[24, 8, 3]) == 255
+assert int(sil_arr[24, 24, 3]) == 0, sil_arr[24, 24]
+assert list(wand_arr[24, 24]) == [0, 0, 0, 255], wand_arr[24, 24]
 
 print("PASS smoke-matte-flags")
 PY

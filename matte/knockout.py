@@ -21,6 +21,7 @@ Usage:
   python knockout.py path/to/file.png --invert     # dark art on light BG
   python knockout.py path/to/file.png --silhouette # key black; keep greys; blur 2 then levels 150–170
   python knockout.py path/to/file.png --silhouette --blur 0   # hard key, no edge refine
+  python knockout.py path/to/file.png --wand       # key only backdrop connected to the image edge
   python knockout.py path/to/file.png --force      # reprocess hextile-pipe outputs
 """
 from __future__ import annotations
@@ -30,9 +31,10 @@ import math
 import os
 import sys
 import tempfile
+from collections import deque
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 from PIL.PngImagePlugin import PngInfo
 
 from colorutil import COLOR_HELP, RECURSIVE_HELP, collect_files, parse_color, resolve_levels_pct
@@ -43,6 +45,13 @@ try:
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
+
+try:
+    from scipy import ndimage as ndi
+
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 META_TOOL_KEY = "hextile-pipe-tool"
@@ -57,6 +66,8 @@ DEFAULT_WHITE = 97.0
 DEFAULT_BLUR = 2.0
 DEFAULT_LO = 150.0
 DEFAULT_HI = 170.0
+# --wand: dilate keep this many px to seal AA leaks, flood, then erode back.
+DEFAULT_CLOSE = 2.0
 
 
 def _validate_levels(cutoff: float, white: float, gamma: float) -> None:
@@ -80,6 +91,119 @@ def _validate_edge(blur: float, lo: float, hi: float) -> None:
         raise ValueError("lo/hi must be finite numbers")
     if not 0.0 <= lo < hi <= 255.0:
         raise ValueError("need 0 <= --lo < --hi <= 255")
+
+
+def _validate_close(close_px: float) -> None:
+    if not (math.isfinite(close_px) and close_px >= 0):
+        raise ValueError("close must be a finite number ≥ 0")
+
+
+def _morph_size(im: Image.Image, radius: int) -> int | None:
+    if radius <= 0:
+        return None
+    size = radius * 2 + 1
+    w, h = im.size
+    if size > w or size > h:
+        size = min(w, h)
+        if size % 2 == 0:
+            size -= 1
+        if size < 3:
+            return None
+    return size
+
+
+def _dilate_l(im: Image.Image, radius: int) -> Image.Image:
+    im = im.convert("L")
+    size = _morph_size(im, radius)
+    if size is None:
+        return im
+    return im.filter(ImageFilter.MaxFilter(size=size))
+
+
+def _erode_l(im: Image.Image, radius: int) -> Image.Image:
+    im = im.convert("L")
+    size = _morph_size(im, radius)
+    if size is None:
+        return im
+    return im.filter(ImageFilter.MinFilter(size=size))
+
+
+def _flood_border_np(bg: "np.ndarray") -> "np.ndarray":
+    """True where bg is 4-connected to the image border."""
+    if HAS_SCIPY:
+        seed = np.zeros_like(bg, dtype=bool)
+        seed[0] = bg[0]
+        seed[-1] = bg[-1]
+        seed[:, 0] = bg[:, 0]
+        seed[:, -1] = bg[:, -1]
+        struct = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
+        return ndi.binary_propagation(seed, mask=bg, structure=struct)
+    h, w = bg.shape
+    out = np.zeros((h, w), dtype=bool)
+    q: deque[tuple[int, int]] = deque()
+
+    def seed(y: int, x: int) -> None:
+        if bg[y, x] and not out[y, x]:
+            out[y, x] = True
+            q.append((y, x))
+
+    for x in range(w):
+        seed(0, x)
+        seed(h - 1, x)
+    for y in range(h):
+        seed(y, 0)
+        seed(y, w - 1)
+    while q:
+        y, x = q.popleft()
+        if y > 0 and bg[y - 1, x] and not out[y - 1, x]:
+            out[y - 1, x] = True
+            q.append((y - 1, x))
+        if y + 1 < h and bg[y + 1, x] and not out[y + 1, x]:
+            out[y + 1, x] = True
+            q.append((y + 1, x))
+        if x > 0 and bg[y, x - 1] and not out[y, x - 1]:
+            out[y, x - 1] = True
+            q.append((y, x - 1))
+        if x + 1 < w and bg[y, x + 1] and not out[y, x + 1]:
+            out[y, x + 1] = True
+            q.append((y, x + 1))
+    return out
+
+
+def _flood_border_pil(sealed_keep: Image.Image) -> Image.Image:
+    """sealed_keep 255=keep / 0=bg. Return 255 where flood from the border cannot reach."""
+    work = sealed_keep.convert("L").copy()
+    w, h = work.size
+    px = work.load()
+    for x in range(w):
+        if px[x, 0] == 0:
+            ImageDraw.floodfill(work, (x, 0), 64)
+        if px[x, h - 1] == 0:
+            ImageDraw.floodfill(work, (x, h - 1), 64)
+    for y in range(h):
+        if px[0, y] == 0:
+            ImageDraw.floodfill(work, (0, y), 64)
+        if px[w - 1, y] == 0:
+            ImageDraw.floodfill(work, (w - 1, y), 64)
+    return work.point(lambda v: 0 if v == 64 else 255)
+
+
+def _wand_wrap(hard: Image.Image, close_px: float) -> Image.Image:
+    """Seal AA leaks, key only backdrop connected to the edge, unseal.
+
+    Interior black (not reachable from the border) stays 255.
+    """
+    _validate_close(close_px)
+    hard = hard.convert("L")
+    radius = int(round(close_px))
+    sealed = _dilate_l(hard, radius)
+    if HAS_NUMPY:
+        keep = np.array(sealed) > 127
+        wrap = ~_flood_border_np(~keep)
+        wrap_im = Image.fromarray(np.where(wrap, np.uint8(255), np.uint8(0)), mode="L")
+    else:
+        wrap_im = _flood_border_pil(sealed)
+    return _erode_l(wrap_im, radius)
 
 
 def _refine_silhouette_alpha(
@@ -153,6 +277,8 @@ def knockout_image(
     color: tuple[int, int, int] = (255, 255, 255),
     invert: bool = False,
     silhouette: bool = False,
+    wand: bool = False,
+    close: float = DEFAULT_CLOSE,
     blur: float = DEFAULT_BLUR,
     lo: float = DEFAULT_LO,
     hi: float = DEFAULT_HI,
@@ -161,14 +287,19 @@ def knockout_image(
 
     --silhouette: key luma at/under cutoff to alpha 0; keep original RGB.
     Then blur the matte and input-levels it (default blur 2, lo 150, hi 170).
-    --color unused.
+    --wand: implies --silhouette; key only backdrop connected to the image
+    edge (2px seal, flood, unseal). Interior black stays opaque.
+    --color unused with either.
     """
     _validate_cutoff(cutoff)
     black_pt = cutoff / 100.0 * 255.0
     rgba = im.convert("RGBA")
+    keep_rgb = silhouette or wand
 
-    if silhouette:
+    if keep_rgb:
         _validate_edge(blur, lo, hi)
+        if wand:
+            _validate_close(close)
         if HAS_NUMPY:
             arr = np.array(rgba, dtype=np.uint8)
             r = arr[:, :, 0].astype(np.float32)
@@ -178,10 +309,12 @@ def knockout_image(
             if invert:
                 L = 255.0 - L
             keep = (L > black_pt) & (arr[:, :, 3] > 0)
-            hard = np.where(keep, np.uint8(255), np.uint8(0))
-            refined = _refine_silhouette_alpha(
-                Image.fromarray(hard, mode="L"), blur, lo, hi
+            hard_im = Image.fromarray(
+                np.where(keep, np.uint8(255), np.uint8(0)), mode="L"
             )
+            if wand:
+                hard_im = _wand_wrap(hard_im, close)
+            refined = _refine_silhouette_alpha(hard_im, blur, lo, hi)
             out = arr.copy()
             out[:, :, 3] = np.array(refined, dtype=np.uint8)
             return Image.fromarray(out, mode="RGBA")
@@ -199,6 +332,8 @@ def knockout_image(
                     L = 255.0 - L
                 if L > black_pt:
                     hp[x, y] = 255
+        if wand:
+            hard_im = _wand_wrap(hard_im, close)
         refined = _refine_silhouette_alpha(hard_im, blur, lo, hi)
         out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         op = out.load()
@@ -297,6 +432,8 @@ def knockout_file(
     color: tuple[int, int, int] = (255, 255, 255),
     invert: bool = False,
     silhouette: bool = False,
+    wand: bool = False,
+    close: float = DEFAULT_CLOSE,
     blur: float = DEFAULT_BLUR,
     lo: float = DEFAULT_LO,
     hi: float = DEFAULT_HI,
@@ -310,6 +447,8 @@ def knockout_file(
             color=color,
             invert=invert,
             silhouette=silhouette,
+            wand=wand,
+            close=close,
             blur=blur,
             lo=lo,
             hi=hi,
@@ -397,6 +536,8 @@ def main(argv: list[str] | None = None) -> int:
             "Levels cutoff on luminance, then fill RGB. "
             "--silhouette keys only the black, keeps original greys, "
             "then blur the matte and levels it (default blur 2, 150–170). "
+            "--wand keys only backdrop connected to the image edge "
+            "(implies --silhouette; interior black stays). "
             "Default: overwrite source PNG."
         )
     )
@@ -428,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=None,
         metavar="PCT",
-        help="Levels white point 0–100: brightness at/above this → alpha 255 (default 97; unused with --silhouette)",
+        help="Levels white point 0–100: brightness at/above this → alpha 255 (default 97; unused with --silhouette/--wand)",
     )
     ap.add_argument(
         "--black-point",
@@ -467,25 +608,33 @@ def main(argv: list[str] | None = None) -> int:
         help="Key only luma at/under --cutoff; keep original RGB; blur then levels the matte",
     )
     ap.add_argument(
+        "--wand",
+        action="store_true",
+        help=(
+            "Key only backdrop connected to the image edge (implies --silhouette). "
+            "Seals 2px, floods from the border, unseals. Interior black stays opaque"
+        ),
+    )
+    ap.add_argument(
         "--blur",
         type=float,
         default=None,
         metavar="PX",
-        help="Silhouette only: Gaussian blur on the matte in pixels (default 2; 0 = off)",
+        help="Silhouette/--wand: Gaussian blur on the matte in pixels (default 2; 0 = off)",
     )
     ap.add_argument(
         "--lo",
         type=float,
         default=None,
         metavar="N",
-        help="Silhouette only: levels black point on the blurred matte 0–255 (default 150)",
+        help="Silhouette/--wand: levels black point on the blurred matte 0–255 (default 150)",
     )
     ap.add_argument(
         "--hi",
         type=float,
         default=None,
         metavar="N",
-        help="Silhouette only: levels white point on the blurred matte 0–255 (default 170)",
+        help="Silhouette/--wand: levels white point on the blurred matte 0–255 (default 170)",
     )
     args = ap.parse_args(argv)
 
@@ -501,7 +650,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        if args.silhouette:
+        keep_rgb = args.silhouette or args.wand
+        if keep_rgb:
             cutoff, _ignored_white = resolve_levels_pct(
                 cutoff=args.cutoff,
                 white=None,
@@ -518,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
             _validate_edge(blur, lo, hi)
         else:
             if args.blur is not None or args.lo is not None or args.hi is not None:
-                raise ValueError("--blur/--lo/--hi only apply with --silhouette")
+                raise ValueError("--blur/--lo/--hi only apply with --silhouette or --wand")
             cutoff, white = resolve_levels_pct(
                 cutoff=args.cutoff,
                 white=args.white,
@@ -564,9 +714,10 @@ def main(argv: list[str] | None = None) -> int:
                 color=fill,
                 invert=args.invert,
                 silhouette=args.silhouette,
-                blur=blur if args.silhouette else DEFAULT_BLUR,
-                lo=lo if args.silhouette else DEFAULT_LO,
-                hi=hi if args.silhouette else DEFAULT_HI,
+                wand=args.wand,
+                blur=blur if keep_rgb else DEFAULT_BLUR,
+                lo=lo if keep_rgb else DEFAULT_LO,
+                hi=hi if keep_rgb else DEFAULT_HI,
             )
             print(f"OK  {src} -> {dest}")
         except Exception as e:

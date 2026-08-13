@@ -29,11 +29,12 @@ Discover full set: `bash "$ROOT/scripts/fp-run.sh" knockout -h`
 | `--white PCT` | Levels white point 0–100 (default **97** — crush near-white / near-black after `--invert`) |
 | `--black-point` / `--white-point` | Raw luma 0–255 aliases |
 | `--gamma G` | Midtone gamma on alpha |
-| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (unused with `--silhouette`) |
+| `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (unused with `--silhouette` / `--wand`) |
 | `--invert` | Dark art on light background |
 | `--silhouette` | Key only `--cutoff`; keep original greys; blur then levels (default `--blur 2 --lo 150 --hi 170`) |
-| `--blur PX` | Silhouette: Gaussian on the matte (default 2; `0` = hard key) |
-| `--lo` / `--hi` | Silhouette: input levels on the blurred matte 0–255 (default 150–170) |
+| `--wand` | Key only backdrop connected to the image edge (implies `--silhouette`). Seals 2px, floods, unseals. Interior black stays |
+| `--blur PX` | Silhouette / wand: Gaussian on the matte (default 2; `0` = hard key) |
+| `--lo` / `--hi` | Silhouette / wand: input levels on the blurred matte 0–255 (default 150–170) |
 | `--force` | Allow reprocessing tagged outputs |
 
 ## Path rules
