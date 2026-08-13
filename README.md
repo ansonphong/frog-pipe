@@ -310,13 +310,13 @@ Not a CLI. Sourced by `fp-run` / `fp-doctor` to find the package root.
 
 ## Illustrator
 
-`illustrator/export-grouped-assets.jsx` — select **GroupItems** → dialog → export AI / SVG / PNG.
+`illustrator/export-grouped-assets.jsx` — select page items (groups or ungrouped) → dialog → export AI / SVG / PNG.
 
 Run: **File → Scripts → Other Script…**
 
 | File | Role |
 |------|------|
-| `export-grouped-assets.jsx` | Runnable ExtendScript (v0.2.7) |
+| `export-grouped-assets.jsx` | Runnable ExtendScript (v0.2.8) |
 | `export-grouped-assets-design.md` | Design notes |
 | `artboard-export-all-groups.md` | Earlier brief |
 | `test-pure-helpers.js` | Pure-helper tests (no Illustrator) |
