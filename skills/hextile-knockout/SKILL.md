@@ -31,9 +31,9 @@ Discover full set: `bash "$ROOT/scripts/fp-run.sh" knockout -h`
 | `--gamma G` | Midtone gamma on alpha |
 | `--color COLOR` | Fill RGB: name, `#rrggbb`, or `r,g,b` (unused with `--silhouette`) |
 | `--invert` | Dark art on light background |
-| `--silhouette` | Key only `--cutoff`; keep original greys; blur then levels (default `--blur 4 --lo 123 --hi 133`) |
+| `--silhouette` | Key only `--cutoff`; keep original greys; blur then levels (default `--blur 4 --lo 112 --hi 128`) |
 | `--blur PX` | Silhouette: Gaussian on the matte (default 4; `0` = hard key) |
-| `--lo` / `--hi` | Silhouette: input levels on the blurred matte 0–255 (default 123–133) |
+| `--lo` / `--hi` | Silhouette: input levels on the blurred matte 0–255 (default 112–128) |
 | `--force` | Allow reprocessing tagged outputs |
 
 ## Path rules
